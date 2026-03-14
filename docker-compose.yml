@@ -1,0 +1,26 @@
+services:
+  polar-api:
+    build: ./backend
+    container_name: polar-api
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    ports:
+      - "3201:8000"
+    environment:
+      - TZ=Asia/Seoul
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+
+  polar-web:
+    build: ./frontend
+    container_name: polar-web
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3200:5173"
+    environment:
+      - TZ=Asia/Seoul
+    command: npm run dev -- --host
+    restart: unless-stopped
