@@ -5,6 +5,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { apiGet } from "@/api/client";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { formatKoreanDate } from "@/lib/dateUtils";
 
 interface PhotoInfo {
   id: number;
@@ -25,22 +27,6 @@ interface MomentDetail {
 interface Props {
   momentId: number | null;
   onClose: () => void;
-}
-
-/** resize에도 반응하는 모바일 판단 hook */
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
-  useEffect(() => {
-    const handler = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener("resize", handler);
-    return () => window.removeEventListener("resize", handler);
-  }, []);
-  return isMobile;
-}
-
-function formatKoreanDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split("-");
-  return `${y}년 ${parseInt(m)}월 ${parseInt(d)}일`;
 }
 
 function PhotoCarousel({ photos }: { photos: PhotoInfo[] }) {

@@ -3,6 +3,9 @@ from pathlib import Path
 DATA_DIR = Path("/app/data")
 
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
+
+THUMBNAIL_GALLERY_SIZE = 800   # px
+THUMBNAIL_LIST_SIZE = 200      # px
 DB_PATH = DATA_DIR / "polar.db"
 ORIGINALS_DIR = DATA_DIR / "originals"
 THUMBNAILS_GALLERY_DIR = DATA_DIR / "thumbnails" / "gallery"

@@ -1,9 +1,9 @@
 import { BrowserRouter, Routes, Route, Link, useLocation, useSearchParams } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
-import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import HomePage from "@/pages/HomePage";
 import UploadPage from "@/pages/UploadPage";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 
 function TimelineIcon({ active }: { active: boolean }) {
@@ -105,7 +105,6 @@ function GridIcon({ active }: { active: boolean }) {
 
 function Header() {
   const location = useLocation();
-  const isUpload = location.pathname === "/upload";
   const isHome = location.pathname === "/";
   const [searchParams, setSearchParams] = useSearchParams();
   // 기본값: gallery (파라미터 없음 = gallery)
@@ -180,10 +179,12 @@ function Layout() {
     <div className="min-h-screen bg-background">
       <Header />
       <main>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/upload" element={<UploadPage />} />
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/upload" element={<UploadPage />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
       <BottomNav />
       <DesktopFab />

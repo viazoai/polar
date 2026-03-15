@@ -7,12 +7,9 @@ from pathlib import Path
 import pillow_heif
 from PIL import Image, ExifTags
 
-from config import ORIGINALS_DIR, THUMBNAILS_GALLERY_DIR, THUMBNAILS_LIST_DIR
+from config import ORIGINALS_DIR, THUMBNAILS_GALLERY_DIR, THUMBNAILS_LIST_DIR, THUMBNAIL_GALLERY_SIZE, THUMBNAIL_LIST_SIZE
 
 pillow_heif.register_heif_opener()
-
-GALLERY_MAX_SIZE = 800
-LIST_MAX_SIZE = 200
 
 
 def _extract_exif(img: Image.Image) -> dict:
@@ -220,8 +217,8 @@ def process_upload(
     else:
         rgb_img = img
 
-    _generate_thumbnail(rgb_img, GALLERY_MAX_SIZE, gallery_path)
-    _generate_thumbnail(rgb_img, LIST_MAX_SIZE, list_path)
+    _generate_thumbnail(rgb_img, THUMBNAIL_GALLERY_SIZE, gallery_path)
+    _generate_thumbnail(rgb_img, THUMBNAIL_LIST_SIZE, list_path)
 
     return {
         "file_id": file_id,

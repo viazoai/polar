@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { formatCardDate } from "@/lib/dateUtils";
 
 export interface MomentSummary {
   id: number;
@@ -25,13 +26,6 @@ const STACK_OFFSETS = [
     { r: -3.0, x: -4, y: 2 },
   ],
 ];
-
-function formatShortDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split("-");
-  const days = ["일", "월", "화", "수", "목", "금", "토"];
-  const dow = days[new Date(Number(y), Number(m) - 1, Number(d)).getDay()];
-  return `${y}. ${m}. ${d} (${dow})`;
-}
 
 function PhotoPlaceholder() {
   return (
@@ -128,7 +122,7 @@ export default function PolaroidCard({ moment, index, onClick }: Props) {
             {moment.title || "새로운 순간"}
           </p>
           <p className="text-xs text-zinc-400 mt-1">
-            {formatShortDate(moment.date)}
+            {formatCardDate(moment.date)}
           </p>
         </div>
       </motion.div>
