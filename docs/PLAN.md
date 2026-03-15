@@ -1,6 +1,6 @@
 # Polar 개발 계획서
 
-> 최종 수정: 2026-03-15
+> 최종 수정: 2026-03-15 (4단계 진행 중)
 
 ---
 
@@ -193,55 +193,52 @@ frontend/
 
 ---
 
-## 4단계: AI 연동 🔜 다음
+## 4단계: AI 연동 ✅ 완료
 
 > 목표: GPT-4o Vision으로 사진에 생명 불어넣기
 
-### 4-1. AI 서비스 구현 (백엔드)
+### 4-1. AI 서비스 구현 (백엔드) ✅ 완료
 
-- [ ] `backend/services/ai_service.py` 생성
-- [ ] OpenAI API 클라이언트 설정 (`.env`의 `OPENAI_API_KEY`)
-- [ ] 사진 분석 함수: 이미지 → GPT-4o Vision
-  - 입력: 사진 바이트 (리사이즈하여 API 비용 절감, max 1024px)
-  - 출력: { title: string, diary: string, people: string[] }
-  - 프롬프트: 한국어, 감성적 톤, 가족 사진 컨텍스트
-- [ ] 인물 식별 함수: 사진 + 참조 사진들 → GPT-4o Vision
-  - 참조 사진과 비교하여 인물 이름 + confidence 반환
-- [ ] API 호출 실패 시 재시도 로직 (최대 2회)
-- [ ] 비용 추적: 각 호출의 토큰 사용량 로깅
+- [x] `backend/services/ai_service.py` 생성
+- [x] OpenAI API 클라이언트 설정 (`.env`의 `OPENAI_API_KEY` → `docker-compose.yml` 환경변수 주입)
+- [x] 사진 분석 함수 `analyze_photo()`: 이미지 → GPT-4o Vision
+  - max 1024px 리사이즈 (JPEG base64), 재시도 3회
+  - 출력: `{"title": str, "diary": str}` 또는 실패 시 `None`
+  - 프롬프트: 한국어, 감성적 톤, JSON 강제 응답
+- [x] 인물 식별 함수 `identify_people()`: 사진 + 참조 사진 → confidence 반환
+  - 구성원당 참조 사진 최대 2장 GPT-4o에 전달
+- [x] API 호출 실패 시 재시도 (3회, 1초 대기)
+- [x] 비용 추적: prompt/completion/total 토큰 `logger.info` 기록
 
-### 4-2. 업로드 파이프라인에 AI 통합
+### 4-2. 업로드 파이프라인에 AI 통합 ✅ 완료
 
-- [ ] 사진 업로드 시 AI 처리 플로우:
-  1. 파일 저장 + 썸네일 생성 (기존, 즉시 응답)
-  2. AI 분석은 백그라운드 처리 (FastAPI BackgroundTasks)
-  3. AI 완료 시 moments 테이블의 title/diary 업데이트
-- [ ] AI 처리 상태 필드 추가 (photos 테이블: `ai_status` = pending/done/failed)
-- [ ] 프론트엔드: AI 처리 중 표시 (로딩 스피너 또는 "AI가 분석 중..." 텍스트)
-- [ ] AI 처리 완료 시 자동 새로고침 또는 폴링
+- [x] 사진 업로드 → 파일 저장+썸네일 즉시 응답 → `BackgroundTasks`로 AI 비동기 처리
+  - 대표 사진 설정(`representative_photo_id IS NULL` 업데이트 성공 시)에만 AI 예약
+- [x] AI 처리 상태: `moments.ai_status` (`pending` → `done` | `failed`)
+  - 기존 DB 마이그레이션: `ALTER TABLE moments ADD COLUMN ai_status ... DEFAULT 'pending'`
+- [x] 프론트엔드: `ai_status === 'pending'`일 때 "AI 분석 중..." animate-pulse 표시
+- [x] AI 처리 완료 시 자동 폴링 (5초 간격, pending → done/failed 시 중단)
 
 ### 4-3. 인물 참조 시스템
 
-- [ ] 관리자 페이지: 가족 구성원 관리
-  - 구성원 추가/수정/삭제
-  - 참조 사진 등록 (1~3장)
-- [ ] API: POST/PUT /api/family, GET /api/family
-- [ ] 참조 사진 저장: `data/references/{member_id}/`
+- [x] API 완료: `GET/POST /api/family`, `PUT /api/family/{id}`, `DELETE /api/family/{id}`, `POST/DELETE/GET /api/family/{id}/reference-photos/{index}`
+- [x] 참조 사진 저장: `data/references/{member_id}/{uuid}.ext` (최대 3장)
+- [x] **프론트엔드 `/family` 페이지**: 구성원 카드 목록, 이름 인라인 편집, 참조 사진 3슬롯 (업로드/삭제), 구성원 삭제
 
-### 4-4. AI 결과 표시 및 수정
+### 4-4. AI 결과 표시 및 수정 ✅ 완료
 
-- [ ] 상세 보기에서 AI 생성 제목/일기 표시 (플레이스홀더 → 실제 데이터)
-- [ ] 인물 태그 Badge 표시 (confidence에 따른 시각적 구분)
-- [ ] 제목/일기 수동 편집 기능
-- [ ] 인물 태그 수동 수정 (확인/삭제/추가)
-- [ ] AI 재생성 버튼 (비용 안내 후 확인)
+- [x] 상세 보기에서 AI 생성 제목/일기 표시 (실제 데이터, pending 시 "분석 중..." 플레이스홀더)
+- [x] 인물 태그 Badge 표시 (`high`→default, `medium/low`→secondary, `low`→`?` 접미어)
+- [x] 제목/일기 수동 편집 — 연필 아이콘 → 인라인 input/textarea → 저장/취소 (`PATCH /api/moments/{id}`)
+- [x] 인물 태그 수동 수정 — 태그 `×`로 제거, 미태그 구성원 `+ 이름` 버튼으로 추가
+- [x] AI 재생성 버튼 — "AI 다시 분석" → 확인 다이얼로그 → `POST /api/moments/{id}/regenerate-ai`
 
 ### 검증
 
-- 사진 업로드 → AI 제목/일기 자동 생성 확인
-- 인물 참조 사진 등록 → 인물 식별 정확도 확인
-- AI 실패 시 fallback ("새로운 순간" 플레이스홀더 유지) 확인
-- 수동 편집 후 저장/반영 확인
+- [ ] 사진 업로드 → AI 제목/일기 자동 생성 확인 (`.env`에 OPENAI_API_KEY 입력 완료)
+- [ ] 인물 참조 사진 등록 → 인물 식별 정확도 확인
+- [x] AI 실패 시 fallback (`ai_status = 'failed'`, "새로운 순간" 플레이스홀더 유지) 확인
+- [x] 수동 편집 후 저장/반영 확인
 
 ---
 
@@ -257,14 +254,12 @@ frontend/
 - [ ] 날짜별 필터: 연/월 단위
   - 모바일: 하단 시트에서 연/월 선택기
   - 데스크톱: Calendar Popover
-- [ ] 갤러리 뷰 + 리스트 뷰 모두에서 동작
+- [ ] 갤러리 뷰 + 리스트 뷰 모두에서 동작 (우측하단에 검색 돋보기 동그라미 아이콘 추가)
 - [ ] 필터 상태 URL 파라미터에 반영 (공유 가능)
 
 ### 5-2. 순간 수동 편집
 
 - [ ] 대표 사진 변경 (사진 목록에서 선택)
-- [ ] 순간 분리: 하나의 순간에서 특정 사진들을 새 순간으로 분리
-- [ ] 순간 병합: 두 순간을 하나로 합치기
 - [ ] 날짜 수정
 - [ ] 제목/일기 수동 편집
 - [ ] API: PATCH /api/moments/{id}, POST /merge, POST /split
@@ -284,8 +279,8 @@ frontend/
 - [ ] 간단한 로그인 시스템 (ID/비밀번호)
 - [ ] JWT 토큰 기반 인증 (httpOnly 쿠키 또는 localStorage)
 - [ ] API: POST /api/auth/login, /logout, GET /api/auth/me
-- [ ] 로그인 페이지 (shadcn Card + Form)
-- [ ] 관리자: 사용자 계정 생성/관리
+- [ ] 로그인 페이지 (shadcn Card + Form), 계정 생성 및 요청
+- [ ] 관리자: 사용자 계정 승인
 - [ ] 미인증 상태에서 모든 페이지 접근 차단 → 로그인 리다이렉트
 
 ### 5-5. 배포

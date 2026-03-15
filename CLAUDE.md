@@ -145,6 +145,20 @@ import { cn } from "@/lib/utils";
 - Pillow EXIF: `img.getexif()` + `exif.get_ifd(0x8825)` 공개 API 사용 (`_getexif()` 사용 금지)
 - CORS: `main.py`에서 `localhost:3200`, `polar.zoai.uk` 허용
 
+### AI 서비스 (ai_service.py)
+- `OPENAI_API_KEY`: `config.py`에서 `os.getenv` 로드, `docker-compose.yml`에서 `.env` 통해 주입
+- `analyze_photo(image_bytes)` → `{"title": str, "diary": str} | None` — GPT-4o Vision, max 1024px 리사이즈, 재시도 3회
+- `identify_people(image_bytes, family_members)` → `[{"family_member_id", "name", "confidence"}]`
+  - 참조 사진 포함하여 GPT-4o에 전달 (구성원당 최대 2장)
+- 토큰 사용량은 `logger.info`로 기록
+- API 키 없으면 분석 건너뜀 (graceful fallback)
+
+### AI 처리 흐름
+- 업로드 시 대표 사진으로 설정된 경우(`UPDATE ... WHERE representative_photo_id IS NULL` rowcount > 0)에만 `BackgroundTasks`로 AI 예약
+- `moments.ai_status`: `pending` → `done` | `failed`
+- 백그라운드 함수: `_run_ai_analysis(moment_id, photo_id, file_path)` in `routers/photos.py`
+- 순서: 제목/일기 생성 → family_members 조회 → 인물 식별 → photo_people INSERT
+
 ---
 
 ## 개발 진행 상황
@@ -155,7 +169,7 @@ import { cn } from "@/lib/utils";
 | 2단계 | ✅ 완료 | 모바일 하단 탭 바, 리스트 뷰(월별 그룹), 상세 Sheet/Dialog, 스와이프 닫기 |
 | 3단계 | ✅ 완료 | 폴라로이드 갤러리(PolaroidCard+GalleryView), 줄자 스크롤바, PWA |
 | 리팩토링 | ✅ 완료 | 백엔드 안정성·프론트 컴포넌트 분리·성능 개선 (Phase 1~3) |
-| 4단계 | 🔜 다음 | GPT-4o Vision AI 연동 |
+| 4단계 | ⏳ 진행중 | GPT-4o Vision AI 연동 (백엔드+폴링 완료, 관리자 UI·수동 편집 미완) |
 | 5단계 | ⏳ 예정 | 필터링, 순간 편집, 폴라로이드 다운로드, 인증, 배포 |
 
 상세 태스크: `docs/PLAN.md`
@@ -184,7 +198,9 @@ import { cn } from "@/lib/utils";
 | `backend/main.py` | FastAPI 앱 엔트리, CORS 미들웨어 |
 | `backend/config.py` | 경로 상수, 업로드/썸네일 크기 설정 |
 | `backend/database.py` | SQLite 연결, db_connection() context manager, 테이블 DDL |
-| `backend/routers/photos.py` | 사진 업로드/서빙 API |
-| `backend/routers/moments.py` | 순간 목록/상세 API |
+| `backend/routers/photos.py` | 사진 업로드/서빙 API + BackgroundTasks AI 예약 |
+| `backend/routers/moments.py` | 순간 목록/상세 API (ai_status, people 포함) |
+| `backend/routers/family.py` | 가족 구성원 CRUD + 참조 사진 관리 API |
 | `backend/services/photo_service.py` | EXIF 추출(getexif), 썸네일 생성 |
 | `backend/services/moment_service.py` | 날짜 기반 순간 생성/조회 |
+| `backend/services/ai_service.py` | GPT-4o Vision: 제목/일기 생성, 인물 식별 |

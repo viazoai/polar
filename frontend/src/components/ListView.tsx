@@ -31,30 +31,32 @@ export default function ListView({ moments, onSelect }: Props) {
     const scrollEl = scrollRef.current;
     if (!scrollEl) return;
 
-    // year → 스크롤 하단 경계 밖(아래)에 있는지 여부
-    const yearStatus = new Map<string, boolean>();
+    // 모든 연도를 "아직 지나치지 않음(true)"으로 초기화
+    // → 관찰 전 요소가 없어 notPassed가 비는 경우 방지
+    const yearStatus = new Map<string, boolean>(
+      allYears.map((y) => [String(y), true])
+    );
 
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
           const year = (entry.target as HTMLElement).dataset.yearLine!;
-          const isBelow =
-            !entry.isIntersecting &&
-            entry.boundingClientRect.top > (entry.rootBounds?.bottom ?? 0);
-          yearStatus.set(year, isBelow);
+          // "아직 지나치지 않음" = YearLine 하단이 root 상단보다 아래에 있음
+          const notYetPassed =
+            entry.boundingClientRect.bottom > (entry.rootBounds?.top ?? 0);
+          yearStatus.set(year, notYetPassed);
         }
 
-        const below = [...yearStatus.entries()]
-          .filter(([, b]) => b)
+        const notPassed = [...yearStatus.entries()]
+          .filter(([, v]) => v)
           .map(([y]) => Number(y));
 
-        if (below.length > 0) {
-          // 아직 화면 아래에 있는 연도 중 가장 가까운(최신) 것 표시
-          setCurrentYear(String(Math.max(...below)));
+        if (notPassed.length > 0) {
+          // 아직 지나치지 않은 연도 중 가장 최신(최대값) 표시
+          setCurrentYear(String(Math.max(...notPassed)));
         } else {
-          // 모든 연도가 지나갔으면 가장 오래된 연도 표시
-          const keys = [...yearStatus.keys()].map(Number);
-          if (keys.length > 0) setCurrentYear(String(Math.min(...keys)));
+          // 모든 연도 YearLine이 상단 위로 사라졌으면 가장 오래된 연도
+          setCurrentYear(String(allYears[allYears.length - 1]));
         }
       },
       { root: scrollEl, threshold: 0 }
@@ -64,13 +66,13 @@ export default function ListView({ moments, onSelect }: Props) {
     yearLines.forEach((el) => observer.observe(el));
 
     return () => observer.disconnect();
-  }, [moments]);
+  }, [moments, allYears]);
 
   return (
     <>
-      {/* 현재 연도 바 — 하단 탭 바로 위, 흰색 배경으로 콘텐츠 가림 */}
+      {/* 현재 연도 바 — left-0 right-0 + mx-auto 로 콘텐츠와 동일한 기준 centering */}
       <div
-        className="fixed z-30 pointer-events-none left-0 right-0 bg-background"
+        className="fixed z-30 pointer-events-none left-0 right-0 max-w-2xl mx-auto bg-background"
         style={{ bottom: "var(--bottom-nav-height)", height: "36px" }}
       >
         <AnimatePresence mode="wait">

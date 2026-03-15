@@ -16,8 +16,8 @@ export function formatCardDate(dateStr: string): string {
   return `${y}. ${m}. ${d} (${getDow(y, m, d)})`;
 }
 
-/** 상세 보기용: "2026년 3월 15일" */
+/** 상세 보기용: "2026. 03. 15 (일)" — 연도 포함 */
 export function formatKoreanDate(dateStr: string): string {
   const [y, m, d] = dateStr.split("-");
-  return `${y}년 ${parseInt(m)}월 ${parseInt(d)}일`;
+  return `${y}. ${m}. ${d} (${getDow(y, m, d)})`;
 }

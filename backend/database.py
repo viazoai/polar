@@ -49,6 +49,7 @@ def init_db():
             diary TEXT,
             location TEXT,
             representative_photo_id INTEGER,
+            ai_status TEXT NOT NULL DEFAULT 'pending',
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
@@ -79,5 +80,33 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_photos_moment_id ON photos(moment_id);
         CREATE INDEX IF NOT EXISTS idx_photos_taken_at ON photos(taken_at);
     """)
+
+    # 마이그레이션: 기존 DB에 신규 컬럼이 없으면 추가
+    for sql in [
+        "ALTER TABLE moments ADD COLUMN ai_status TEXT NOT NULL DEFAULT 'pending'",
+        "ALTER TABLE moments ADD COLUMN content_source TEXT",  # NULL | 'ai' | 'manual'
+    ]:
+        try:
+            conn.execute(sql)
+        except sqlite3.OperationalError:
+            pass  # 이미 존재하면 무시
+
+    # 일회성 데이터 픽스: AI 분석 큐에 올라간 적 없는 기존 순간들을 'failed'로 교정
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS migrations (
+            name TEXT PRIMARY KEY,
+            applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    if not conn.execute(
+        "SELECT 1 FROM migrations WHERE name = 'fix_orphan_pending_moments'"
+    ).fetchone():
+        conn.execute(
+            "UPDATE moments SET ai_status = 'failed' WHERE ai_status = 'pending'"
+        )
+        conn.execute(
+            "INSERT INTO migrations (name) VALUES ('fix_orphan_pending_moments')"
+        )
+
     conn.commit()
     conn.close()

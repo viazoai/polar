@@ -18,6 +18,13 @@ class PhotoInfo(BaseModel):
     taken_at: str
 
 
+class PersonTag(BaseModel):
+    family_member_id: int
+    name: str
+    confidence: str  # high | medium | low
+    is_confirmed: bool
+
+
 class MomentSummary(BaseModel):
     id: int
     date: str
@@ -25,6 +32,7 @@ class MomentSummary(BaseModel):
     photo_count: int
     representative_photo_id: int | None
     representative_thumbnail: str | None
+    ai_status: str  # pending | done | failed
 
 
 class MomentDetail(BaseModel):
@@ -33,4 +41,31 @@ class MomentDetail(BaseModel):
     title: str | None
     diary: str | None
     location: str | None
+    ai_status: str
+    content_source: str | None  # None | 'ai' | 'manual'
+    representative_photo_id: int | None
+    people: list[PersonTag]
     photos: list[PhotoInfo]
+
+
+class FamilyMember(BaseModel):
+    id: int
+    name: str
+    reference_photos: list[str]
+
+
+class FamilyMemberCreate(BaseModel):
+    name: str
+
+
+class FamilyMemberUpdate(BaseModel):
+    name: str | None = None
+
+
+class MomentUpdate(BaseModel):
+    title: str | None = None
+    diary: str | None = None
+
+
+class PersonTagUpdate(BaseModel):
+    family_member_id: int

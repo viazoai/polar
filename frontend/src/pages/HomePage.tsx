@@ -90,6 +90,25 @@ export default function HomePage() {
       <MomentDetailSheet
         momentId={selectedId}
         onClose={() => setSelectedId(null)}
+        onDeleted={(id) => {
+          setMoments((prev) => prev.filter((m) => m.id !== id));
+          setSelectedId(null);
+        }}
+        onUpdated={(detail) => {
+          setMoments((prev) =>
+            prev.map((m) =>
+              m.id === detail.id
+                ? {
+                    ...m,
+                    title: detail.title,
+                    representative_photo_id: detail.representative_photo_id,
+                    photo_count: detail.photos.length,
+                    ai_status: detail.ai_status,
+                  }
+                : m
+            )
+          );
+        }}
       />
     </>
   );

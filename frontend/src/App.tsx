@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import HomePage from "@/pages/HomePage";
 import UploadPage from "@/pages/UploadPage";
+import FamilyPage from "@/pages/FamilyPage";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 
@@ -151,8 +152,25 @@ function Header() {
         )}
       </div>
 
-      {/* 우측: 여백 균형용 */}
-      <div className="shrink-0 w-[72px] hidden md:block" />
+      {/* 우측: 가족 구성원 관리 */}
+      <div className="shrink-0 flex items-center justify-end w-[72px]">
+        <Link
+          to="/family"
+          className={cn(
+            "p-1.5 rounded-md transition-colors",
+            location.pathname === "/family" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+          )}
+          title="가족 구성원"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+        </Link>
+      </div>
     </header>
   );
 }
@@ -183,6 +201,7 @@ function Layout() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/upload" element={<UploadPage />} />
+            <Route path="/family" element={<FamilyPage />} />
           </Routes>
         </ErrorBoundary>
       </main>

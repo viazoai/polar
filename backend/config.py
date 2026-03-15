@@ -1,6 +1,8 @@
+import os
 from pathlib import Path
 
 DATA_DIR = Path("/app/data")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
 

@@ -169,7 +169,7 @@ export default function UploadPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <button
-            className="flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-5 text-muted-foreground hover:border-foreground/40 hover:text-foreground active:bg-muted/30 transition-colors"
+            className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-muted-foreground/40 rounded-xl p-5 text-muted-foreground/60 hover:border-muted-foreground/60 hover:text-muted-foreground active:bg-muted/30 transition-colors"
             onClick={() => inputRef.current?.click()}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
@@ -191,7 +191,7 @@ export default function UploadPage() {
           </button>
 
           <button
-            className="flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-5 text-muted-foreground hover:border-foreground/40 hover:text-foreground active:bg-muted/30 transition-colors"
+            className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-muted-foreground/40 rounded-xl p-5 text-muted-foreground/60 hover:border-muted-foreground/60 hover:text-muted-foreground active:bg-muted/30 transition-colors"
             onClick={() => cameraRef.current?.click()}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
