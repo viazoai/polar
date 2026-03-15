@@ -24,31 +24,46 @@ export default function ListView({ moments, onSelect }: Props) {
   // 데이터가 있는 연도만 (내림차순)
   const allYears = Array.from(yearMap.keys()).sort((a, b) => b - a);
 
-  // 현재 연도 추적 (스크롤 기반)
+  // 현재 연도 추적 — IntersectionObserver로 layout thrashing 없이 감지
   const [currentYear, setCurrentYear] = useState(String(newestYear));
 
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const findHiddenYear = () => {
-      const bottomEdge = el.getBoundingClientRect().bottom;
-      const yearLines = el.querySelectorAll("[data-year-line]");
-      let hidden = "";
-      for (const line of yearLines) {
-        const rect = (line as HTMLElement).getBoundingClientRect();
-        if (rect.top >= bottomEdge) {
-          hidden = (line as HTMLElement).dataset.yearLine!;
-          break;
+    const scrollEl = scrollRef.current;
+    if (!scrollEl) return;
+
+    // year → 스크롤 하단 경계 밖(아래)에 있는지 여부
+    const yearStatus = new Map<string, boolean>();
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const year = (entry.target as HTMLElement).dataset.yearLine!;
+          const isBelow =
+            !entry.isIntersecting &&
+            entry.boundingClientRect.top > (entry.rootBounds?.bottom ?? 0);
+          yearStatus.set(year, isBelow);
         }
-      }
-      if (!hidden && yearLines.length > 0) {
-        hidden = (yearLines[yearLines.length - 1] as HTMLElement).dataset.yearLine!;
-      }
-      if (hidden) setCurrentYear(hidden);
-    };
-    requestAnimationFrame(findHiddenYear);
-    el.addEventListener("scroll", findHiddenYear, { passive: true });
-    return () => el.removeEventListener("scroll", findHiddenYear);
+
+        const below = [...yearStatus.entries()]
+          .filter(([, b]) => b)
+          .map(([y]) => Number(y));
+
+        if (below.length > 0) {
+          // 아직 화면 아래에 있는 연도 중 가장 가까운(최신) 것 표시
+          setCurrentYear(String(Math.max(...below)));
+        } else {
+          // 모든 연도가 지나갔으면 가장 오래된 연도 표시
+          const keys = [...yearStatus.keys()].map(Number);
+          if (keys.length > 0) setCurrentYear(String(Math.min(...keys)));
+        }
+      },
+      { root: scrollEl, threshold: 0 }
+    );
+
+    const yearLines = scrollEl.querySelectorAll<HTMLElement>("[data-year-line]");
+    yearLines.forEach((el) => observer.observe(el));
+
+    return () => observer.disconnect();
   }, [moments]);
 
   return (

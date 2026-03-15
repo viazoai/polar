@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { formatTimelineDate } from "@/lib/dateUtils";
 import { type MomentSummary } from "@/components/PolaroidCard";
@@ -29,7 +30,7 @@ interface Props {
 }
 
 /** 순간 행 — 동그라미 마커 + 연결선 + 썸네일 + 정보 */
-export default function MomentRow({ moment, onSelect }: Props) {
+function MomentRow({ moment, onSelect }: Props) {
   return (
     <div className="relative">
       {/* ● 동그라미 마커 — 세로선(40px) 중앙 정렬 */}
@@ -91,3 +92,5 @@ export default function MomentRow({ moment, onSelect }: Props) {
     </div>
   );
 }
+
+export default memo(MomentRow);

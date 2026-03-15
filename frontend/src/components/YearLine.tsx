@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -6,7 +7,7 @@ interface Props {
 }
 
 /** 연도 구분선 — 연한 얇은 가로선 + 세로선 위 중앙 정렬된 연도 라벨 */
-export default function YearLine({ year, sticky }: Props) {
+function YearLine({ year, sticky }: Props) {
   return (
     <div
       data-year-line={year}
@@ -27,3 +28,5 @@ export default function YearLine({ year, sticky }: Props) {
     </div>
   );
 }
+
+export default memo(YearLine);

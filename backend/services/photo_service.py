@@ -11,10 +11,14 @@ from config import ORIGINALS_DIR, THUMBNAILS_GALLERY_DIR, THUMBNAILS_LIST_DIR, T
 
 pillow_heif.register_heif_opener()
 
+# EXIF 태그 이름 → ID 역매핑 (모듈 로드 시 1회만 생성)
+_EXIF_TAG_NAMES: dict[str, int] = {v: k for k, v in ExifTags.TAGS.items()}
+_GPS_INFO_TAG_ID = 0x8825  # GPSInfo IFD 태그 ID
+
 
 def _extract_exif(img: Image.Image) -> dict:
     """Extract EXIF data from image. Returns dict with parsed fields."""
-    result = {
+    result: dict = {
         "taken_at": None,
         "gps_lat": None,
         "gps_lng": None,
@@ -22,7 +26,7 @@ def _extract_exif(img: Image.Image) -> dict:
     }
 
     try:
-        exif_data = img._getexif()
+        exif_data = img.getexif()
     except Exception:
         return result
 
@@ -30,7 +34,6 @@ def _extract_exif(img: Image.Image) -> dict:
         return result
 
     # Build human-readable raw EXIF (serializable subset)
-    tag_names = {v: k for k, v in ExifTags.TAGS.items()}
     for tag_id, value in exif_data.items():
         tag_name = ExifTags.TAGS.get(tag_id, str(tag_id))
         try:
@@ -42,7 +45,7 @@ def _extract_exif(img: Image.Image) -> dict:
     # Extract date (fallback chain)
     date_tags = ["DateTimeOriginal", "DateTimeDigitized", "DateTime"]
     for tag_name in date_tags:
-        tag_id = tag_names.get(tag_name)
+        tag_id = _EXIF_TAG_NAMES.get(tag_name)
         if tag_id and tag_id in exif_data:
             try:
                 dt = datetime.strptime(exif_data[tag_id], "%Y:%m:%d %H:%M:%S")
@@ -51,19 +54,18 @@ def _extract_exif(img: Image.Image) -> dict:
             except (ValueError, TypeError):
                 continue
 
-    # Extract GPS
-    gps_tag_id = tag_names.get("GPSInfo")
-    if gps_tag_id and gps_tag_id in exif_data:
-        gps_info = exif_data[gps_tag_id]
-        try:
+    # Extract GPS — get_ifd로 sub-IFD 접근 (Pillow 10+ 공개 API)
+    try:
+        gps_info = exif_data.get_ifd(_GPS_INFO_TAG_ID)
+        if gps_info:
             result["gps_lat"] = _gps_to_decimal(
                 gps_info.get(2), gps_info.get(1)  # GPSLatitude, GPSLatitudeRef
             )
             result["gps_lng"] = _gps_to_decimal(
                 gps_info.get(4), gps_info.get(3)  # GPSLongitude, GPSLongitudeRef
             )
-        except Exception:
-            pass
+    except Exception:
+        pass
 
     return result
 
@@ -112,14 +114,13 @@ def _gps_to_decimal(coords, ref) -> float | None:
 def _auto_orient(img: Image.Image) -> Image.Image:
     """Auto-rotate image based on EXIF orientation."""
     try:
-        exif = img._getexif()
-        if exif:
-            orientation_tag = {v: k for k, v in ExifTags.TAGS.items()}.get("Orientation")
-            if orientation_tag and orientation_tag in exif:
-                orientation = exif[orientation_tag]
-                rotations = {3: 180, 6: 270, 8: 90}
-                if orientation in rotations:
-                    img = img.rotate(rotations[orientation], expand=True)
+        exif = img.getexif()
+        orientation_tag = _EXIF_TAG_NAMES.get("Orientation")
+        if orientation_tag and orientation_tag in exif:
+            orientation = exif[orientation_tag]
+            rotations = {3: 180, 6: 270, 8: 90}
+            if orientation in rotations:
+                img = img.rotate(rotations[orientation], expand=True)
     except Exception:
         pass
     return img
@@ -176,13 +177,11 @@ def process_upload(
     file_id = str(uuid.uuid4())
     ext = Path(filename).suffix.lower() or ".jpg"
 
-    # Open image
+    # Open image — EXIF 추출 후 auto-orient (이미지를 1회만 열어 사용)
     img = Image.open(BytesIO(file_bytes))
-    img = _auto_orient(img)
-
-    # Extract EXIF
-    exif = _extract_exif(Image.open(BytesIO(file_bytes)))  # re-open for raw EXIF
+    exif = _extract_exif(img)
     has_exif_date = exif["taken_at"] is not None
+    img = _auto_orient(img)
 
     # Determine taken_at — 우선순위 폴백 체인
     if manual_date:
