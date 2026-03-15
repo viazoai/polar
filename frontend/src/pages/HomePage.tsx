@@ -3,29 +3,25 @@ import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import MomentDetailSheet from "@/components/MomentDetailSheet";
 import GalleryView from "@/components/GalleryView";
 import { type MomentSummary } from "@/components/PolaroidCard";
 import { apiGet } from "@/api/client";
 
-function formatKoreanDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split("-");
-  return `${y}년 ${parseInt(m)}월 ${parseInt(d)}일`;
+// ─── 유틸 ────────────────────────────────────────────────────────────────────
+
+function formatShortDate(dateStr: string): string {
+  const [, m, d] = dateStr.split("-");
+  return `${parseInt(m)}월 ${parseInt(d)}일`;
 }
 
-function formatMonthHeader(dateStr: string): string {
-  const [y, m] = dateStr.split("-");
-  return `${y}년 ${parseInt(m)}월`;
-}
-
-function groupByMonth(moments: MomentSummary[]): [string, MomentSummary[]][] {
-  const map = new Map<string, MomentSummary[]>();
+function groupByYear(moments: MomentSummary[]): [number, MomentSummary[]][] {
+  const map = new Map<number, MomentSummary[]>();
   for (const m of moments) {
-    const key = m.date.slice(0, 7);
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(m);
+    const y = parseInt(m.date.slice(0, 4));
+    if (!map.has(y)) map.set(y, []);
+    map.get(y)!.push(m);
   }
   return Array.from(map.entries());
 }
@@ -51,6 +47,94 @@ function PhotoIcon() {
   );
 }
 
+// ─── 타임라인 구성 요소 ──────────────────────────────────────────────────────
+
+/** 연도 구분선 — 연한 얇은 가로선 + 세로선 위 중앙 정렬된 연도 라벨 */
+function YearLine({ year }: { year: number }) {
+  return (
+    <div className="relative h-9">
+      {/* 얇고 연한 가로선 — 세로선(40px) 오른쪽만 */}
+      <div
+        className="absolute h-px"
+        style={{ top: "50%", left: "40px", right: "27px", backgroundColor: "rgba(0,0,0,0.08)" }}
+      />
+      {/* 연도 라벨 — 세로선(center 41.25px) 중앙 정렬, 배경으로 가로선 마스킹 */}
+      <span
+        className="absolute z-10 bg-background px-1 text-xs font-semibold text-muted-foreground tabular-nums"
+        style={{ top: "50%", left: "41.25px", transform: "translate(-50%, -50%)" }}
+      >
+        {year}
+      </span>
+    </div>
+  );
+}
+
+/** 순간 행 — 동그라미 마커 + 연결선 + 썸네일 + 정보 */
+function MomentRow({
+  moment,
+  onSelect,
+}: {
+  moment: MomentSummary;
+  onSelect: (id: number) => void;
+}) {
+  return (
+    <div className="relative">
+      {/* ● 동그라미 마커 — 세로선(40px) 중앙 정렬 */}
+      <div
+        className="absolute top-1/2 -translate-y-1/2 z-10"
+        style={{ left: "37px" }}
+      >
+        <div
+          className="w-2 h-2 rounded-full bg-background"
+          style={{ border: "2.5px solid rgba(0,0,0,0.10)" }}
+        />
+      </div>
+
+      {/* 연결선 — 세로선과 동일한 색, 동그라미에서 썸네일까지 */}
+      <div
+        className="absolute top-1/2 h-px"
+        style={{ left: "46px", width: "22px", backgroundColor: "rgba(0,0,0,0.10)" }}
+      />
+
+      <button
+        className="w-full flex items-center gap-3 py-2.5 text-left active:bg-muted/50 transition-colors"
+        style={{ paddingLeft: "72px", paddingRight: "27px", minHeight: 64 }}
+        onClick={() => onSelect(moment.id)}
+      >
+        {/* 썸네일 */}
+        <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center">
+          {moment.representative_photo_id ? (
+            <img
+              src={`/api/photos/${moment.representative_photo_id}/thumbnail/list`}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <PhotoIcon />
+          )}
+        </div>
+
+        {/* 정보: 일자 먼저, 타이틀 아래 */}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-muted-foreground">
+            {formatShortDate(moment.date)}
+          </p>
+          <p className="text-sm font-medium truncate mt-0.5">
+            {moment.title || "새로운 순간"}
+          </p>
+        </div>
+
+        {/* 사진 수 */}
+        <Badge variant="secondary" className="flex-shrink-0 text-xs">
+          {moment.photo_count}장
+        </Badge>
+      </button>
+    </div>
+  );
+}
+
+// ─── 리스트 뷰 ──────────────────────────────────────────────────────────────
+
 function ListView({
   moments,
   onSelect,
@@ -58,7 +142,8 @@ function ListView({
   moments: MomentSummary[];
   onSelect: (id: number) => void;
 }) {
-  const groups = groupByMonth(moments);
+  const yearGroups = groupByYear(moments);
+  const newestYear = parseInt(moments[0].date.slice(0, 4));
 
   return (
     <div
@@ -69,95 +154,42 @@ function ListView({
         overscrollBehaviorY: "contain",
       }}
     >
-      {/* 세로 축선 + 마커가 스크롤과 함께 흐르도록 relative 컨테이너 */}
       <div className="relative pb-tab">
-        {/* 세로 축선 — 콘텐츠 전체 높이에 걸쳐 absolute */}
+        {/* 세로 축선 — 전체 높이에 걸쳐 continuous */}
         <div
-          className="absolute top-0 bottom-0 w-px bg-foreground/12 pointer-events-none"
-          style={{ left: "24px" }}
+          className="absolute top-0 bottom-0 pointer-events-none"
+          style={{ left: "40px", width: "2.5px", backgroundColor: "rgba(0,0,0,0.10)" }}
         />
 
-        {groups.map(([monthKey, groupMoments], groupIdx) => (
-          <div key={monthKey}>
-            {/* 월 구분 헤더 */}
-            <div
-              className="sticky z-10 bg-background/95 backdrop-blur py-2 flex items-center gap-3"
-              style={{ top: 0, paddingLeft: "48px", paddingRight: "16px" }}
-            >
-              <span className="text-xs font-semibold text-muted-foreground">
-                {formatMonthHeader(monthKey + "-01")}
-              </span>
-              <Separator className="flex-1" />
-            </div>
+        {/* 상단 경계 연도 (newestYear + 1) */}
+        <YearLine year={newestYear + 1} />
 
-            {/* 순간 목록 */}
-            <div style={{ paddingLeft: "48px", paddingRight: "16px" }}>
-              {groupMoments.map((moment, idx) => (
-                <div key={moment.id} className="relative">
-                  {/* ▶ 세모 마커 — 행의 세로 중앙, 축선 위에 */}
-                  <div
-                    className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
-                    style={{ left: "14px" }}
-                  >
-                    <div
-                      style={{
-                        width: 0,
-                        height: 0,
-                        borderTop: "5px solid transparent",
-                        borderBottom: "5px solid transparent",
-                        borderLeft: "8px solid rgba(0,0,0,0.45)",
-                      }}
-                    />
-                  </div>
+        {yearGroups.map(([year, yearMoments], yi) => (
+          <div key={year}>
+            {/* 해당 연도의 순간들 */}
+            {yearMoments.map((moment) => (
+              <MomentRow key={moment.id} moment={moment} onSelect={onSelect} />
+            ))}
 
-                  <button
-                    className="w-full flex items-center gap-3 py-3 text-left active:bg-muted/50 transition-colors rounded-lg"
-                    style={{ minHeight: 64 }}
-                    onClick={() => onSelect(moment.id)}
-                  >
-                    {/* 썸네일 */}
-                    <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center">
-                      {moment.representative_photo_id ? (
-                        <img
-                          src={`/api/photos/${moment.representative_photo_id}/thumbnail/list`}
-                          alt=""
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <PhotoIcon />
-                      )}
-                    </div>
+            {/* 연도 구분선 (해당 연도 데이터 아래) */}
+            <YearLine year={year} />
 
-                    {/* 텍스트 */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {moment.title || "새로운 순간"}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {formatKoreanDate(moment.date)}
-                      </p>
-                    </div>
-
-                    {/* 사진 수 */}
-                    <Badge variant="secondary" className="flex-shrink-0 text-xs">
-                      {moment.photo_count}장
-                    </Badge>
-                  </button>
-
-                  {idx < groupMoments.length - 1 && (
-                    <Separator className="ml-[68px]" />
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {groupIdx < groups.length - 1 && <div className="h-2" />}
+            {/* 건너뛴 연도들 */}
+            {yi < yearGroups.length - 1 &&
+              (() => {
+                const nextYear = yearGroups[yi + 1][0];
+                const skipped: number[] = [];
+                for (let y = year - 1; y > nextYear; y--) skipped.push(y);
+                return skipped.map((y) => <YearLine key={y} year={y} />);
+              })()}
           </div>
         ))}
       </div>
     </div>
   );
 }
+
+// ─── 홈 페이지 ──────────────────────────────────────────────────────────────
 
 export default function HomePage() {
   const [moments, setMoments] = useState<MomentSummary[]>([]);
