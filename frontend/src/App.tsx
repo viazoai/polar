@@ -20,23 +20,43 @@ function HomeIcon({ active }: { active: boolean }) {
   );
 }
 
+function TimelineIcon({ active }: { active: boolean }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"
+      viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="8" y1="6" x2="21" y2="6" />
+      <line x1="8" y1="12" x2="21" y2="12" />
+      <line x1="8" y1="18" x2="21" y2="18" />
+      <circle cx="3" cy="6" r="1.5" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="3" cy="12" r="1.5" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="3" cy="18" r="1.5" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
 function BottomNav() {
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const isHome = location.pathname === "/";
+  const view = searchParams.get("view") ?? "gallery";
+
+  const isMemory = isHome && view !== "list";
+  const isTimeline = isHome && view === "list";
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur border-t pb-safe">
       <div className="flex h-16">
-        {/* 홈 탭 */}
+        {/* 추억 탭 */}
         <Link
           to="/"
           className={cn(
             "flex-1 flex flex-col items-center justify-center gap-1 transition-colors",
-            isHome ? "text-foreground" : "text-muted-foreground"
+            isMemory ? "text-foreground" : "text-muted-foreground"
           )}
         >
-          <HomeIcon active={isHome} />
-          <span className="text-[10px]">순간</span>
+          <HomeIcon active={isMemory} />
+          <span className="text-[10px]">추억</span>
         </Link>
 
         {/* 업로드 중앙 FAB */}
@@ -53,8 +73,17 @@ function BottomNav() {
           </Link>
         </div>
 
-        {/* 빈 공간 (향후 설정 탭) */}
-        <div className="flex-1" />
+        {/* 타임라인 탭 */}
+        <Link
+          to="/?view=list"
+          className={cn(
+            "flex-1 flex flex-col items-center justify-center gap-1 transition-colors",
+            isTimeline ? "text-foreground" : "text-muted-foreground"
+          )}
+        >
+          <TimelineIcon active={isTimeline} />
+          <span className="text-[10px]">타임라인</span>
+        </Link>
       </div>
     </nav>
   );
@@ -103,32 +132,36 @@ function Header() {
       </Link>
 
       <div className="flex items-center gap-2">
-        {/* 뷰 토글 — 홈 페이지에서만 표시 */}
+        {/* 뷰 토글 — 홈 페이지, 데스크톱 전용 */}
         {isHome && (
-          <div className="flex items-center gap-0.5 rounded-lg border p-0.5">
-            <button
-              onClick={() => setSearchParams({ view: "list" })}
-              className={cn(
-                "w-8 h-7 flex items-center justify-center rounded-md transition-colors",
-                view === "list"
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-              aria-label="리스트 뷰"
-            >
-              <ListIcon active={view === "list"} />
-            </button>
+          <div className="hidden md:flex items-center gap-0.5 rounded-lg border p-0.5">
+            {/* 추억 (갤러리) */}
             <button
               onClick={() => setSearchParams({})}
               className={cn(
-                "w-8 h-7 flex items-center justify-center rounded-md transition-colors",
+                "h-7 px-2.5 flex items-center gap-1.5 rounded-md transition-colors text-xs",
                 view !== "list"
                   ? "bg-foreground text-background"
                   : "text-muted-foreground hover:text-foreground"
               )}
-              aria-label="갤러리 뷰"
+              aria-label="추억 (갤러리 뷰)"
             >
               <GridIcon active={view !== "list"} />
+              추억
+            </button>
+            {/* 타임라인 (리스트) */}
+            <button
+              onClick={() => setSearchParams({ view: "list" })}
+              className={cn(
+                "h-7 px-2.5 flex items-center gap-1.5 rounded-md transition-colors text-xs",
+                view === "list"
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+              aria-label="타임라인 (리스트 뷰)"
+            >
+              <ListIcon active={view === "list"} />
+              타임라인
             </button>
           </div>
         )}

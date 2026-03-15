@@ -61,68 +61,100 @@ function ListView({
   const groups = groupByMonth(moments);
 
   return (
-    <div className="pb-tab max-w-2xl md:mx-auto">
-      {groups.map(([monthKey, groupMoments], groupIdx) => (
-        <div key={monthKey}>
-          {/* 월 구분 헤더 */}
-          <div
-            className="sticky z-10 bg-background/95 backdrop-blur px-4 py-2 flex items-center gap-3"
-            style={{ top: "var(--header-height)" }}
-          >
-            <span className="text-xs font-semibold text-muted-foreground">
-              {formatMonthHeader(monthKey + "-01")}
-            </span>
-            <Separator className="flex-1" />
-          </div>
+    <div
+      className="max-w-2xl md:mx-auto"
+      style={{
+        height: "calc(100dvh - var(--header-height))",
+        overflowY: "auto",
+        overscrollBehaviorY: "contain",
+      }}
+    >
+      {/* 세로 축선 + 마커가 스크롤과 함께 흐르도록 relative 컨테이너 */}
+      <div className="relative pb-tab">
+        {/* 세로 축선 — 콘텐츠 전체 높이에 걸쳐 absolute */}
+        <div
+          className="absolute top-0 bottom-0 w-px bg-foreground/12 pointer-events-none"
+          style={{ left: "24px" }}
+        />
 
-          {/* 순간 목록 */}
-          <div className="px-4">
-            {groupMoments.map((moment, idx) => (
-              <div key={moment.id}>
-                <button
-                  className="w-full flex items-center gap-3 py-3 text-left active:bg-muted/50 transition-colors rounded-lg"
-                  style={{ minHeight: 64 }}
-                  onClick={() => onSelect(moment.id)}
-                >
-                  {/* 썸네일 */}
-                  <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center">
-                    {moment.representative_photo_id ? (
-                      <img
-                        src={`/api/photos/${moment.representative_photo_id}/thumbnail/list`}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <PhotoIcon />
-                    )}
+        {groups.map(([monthKey, groupMoments], groupIdx) => (
+          <div key={monthKey}>
+            {/* 월 구분 헤더 */}
+            <div
+              className="sticky z-10 bg-background/95 backdrop-blur py-2 flex items-center gap-3"
+              style={{ top: 0, paddingLeft: "48px", paddingRight: "16px" }}
+            >
+              <span className="text-xs font-semibold text-muted-foreground">
+                {formatMonthHeader(monthKey + "-01")}
+              </span>
+              <Separator className="flex-1" />
+            </div>
+
+            {/* 순간 목록 */}
+            <div style={{ paddingLeft: "48px", paddingRight: "16px" }}>
+              {groupMoments.map((moment, idx) => (
+                <div key={moment.id} className="relative">
+                  {/* ▶ 세모 마커 — 행의 세로 중앙, 축선 위에 */}
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
+                    style={{ left: "14px" }}
+                  >
+                    <div
+                      style={{
+                        width: 0,
+                        height: 0,
+                        borderTop: "5px solid transparent",
+                        borderBottom: "5px solid transparent",
+                        borderLeft: "8px solid rgba(0,0,0,0.45)",
+                      }}
+                    />
                   </div>
 
-                  {/* 텍스트 */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {moment.title || "새로운 순간"}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {formatKoreanDate(moment.date)}
-                    </p>
-                  </div>
+                  <button
+                    className="w-full flex items-center gap-3 py-3 text-left active:bg-muted/50 transition-colors rounded-lg"
+                    style={{ minHeight: 64 }}
+                    onClick={() => onSelect(moment.id)}
+                  >
+                    {/* 썸네일 */}
+                    <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center">
+                      {moment.representative_photo_id ? (
+                        <img
+                          src={`/api/photos/${moment.representative_photo_id}/thumbnail/list`}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <PhotoIcon />
+                      )}
+                    </div>
 
-                  {/* 사진 수 */}
-                  <Badge variant="secondary" className="flex-shrink-0 text-xs">
-                    {moment.photo_count}장
-                  </Badge>
-                </button>
+                    {/* 텍스트 */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {moment.title || "새로운 순간"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {formatKoreanDate(moment.date)}
+                      </p>
+                    </div>
 
-                {idx < groupMoments.length - 1 && (
-                  <Separator className="ml-[68px]" />
-                )}
-              </div>
-            ))}
+                    {/* 사진 수 */}
+                    <Badge variant="secondary" className="flex-shrink-0 text-xs">
+                      {moment.photo_count}장
+                    </Badge>
+                  </button>
+
+                  {idx < groupMoments.length - 1 && (
+                    <Separator className="ml-[68px]" />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {groupIdx < groups.length - 1 && <div className="h-2" />}
           </div>
-
-          {groupIdx < groups.length - 1 && <div className="h-2" />}
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

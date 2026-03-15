@@ -1,26 +1,30 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { apiPostFormData } from "@/api/client";
 
-type FileStatus = "pending" | "uploading" | "needs_date" | "done" | "error";
+// ─── 타입 ──────────────────────────────────────────────────────────────────
+
+type DateSource = "exif" | "filename" | "manual" | null;
 
 interface UploadFile {
   file: File;
   preview: string;
-  status: FileStatus;
-  selectedDate?: Date;
-  error?: string;
+  /** 서버에서 감지한 날짜 */
+  detectedDate: string | null;
+  /** 날짜 출처 */
+  source: DateSource;
+  /** 사용자가 확인/수정한 날짜 */
+  confirmedDate: Date | null;
+  /** 날짜 감지 중 여부 */
+  detecting: boolean;
 }
 
 interface UploadResponse {
@@ -30,6 +34,8 @@ interface UploadResponse {
   has_exif_date: boolean;
 }
 
+// ─── 유틸 ──────────────────────────────────────────────────────────────────
+
 function formatDate(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -37,218 +43,296 @@ function formatDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-const statusLabel: Record<FileStatus, string> = {
-  pending: "대기중",
-  uploading: "업로드중",
-  needs_date: "날짜 필요",
-  done: "완료",
-  error: "실패",
+function parseISODate(iso: string): Date {
+  return new Date(iso.replace("T", " "));
+}
+
+const SOURCE_LABEL: Record<Exclude<DateSource, null>, string> = {
+  exif:     "기록일자 기준: 파일 메타데이터",
+  filename: "기록일자 기준: 파일명",
+  manual:   "기록일자 기준: 직접 입력",
 };
 
-const statusVariant: Record<FileStatus, "default" | "secondary" | "destructive" | "outline"> = {
-  pending: "secondary",
-  uploading: "outline",
-  needs_date: "destructive",
-  done: "default",
-  error: "destructive",
+const SOURCE_COLOR: Record<Exclude<DateSource, null>, string> = {
+  exif:     "text-emerald-600",
+  filename: "text-sky-600",
+  manual:   "text-violet-600",
 };
+
+// ─── 컴포넌트 ──────────────────────────────────────────────────────────────
 
 export default function UploadPage() {
   const [files, setFiles] = useState<UploadFile[]>([]);
-  const [uploading, setUploading] = useState(false);
+  const [step, setStep] = useState<"select" | "confirm" | "uploading">("select");
+  const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
-  const addFiles = (fileList: FileList) => {
+  // 파일 추가 → 날짜 감지 요청
+  const addFiles = async (fileList: FileList) => {
     const newFiles: UploadFile[] = Array.from(fileList).map((file) => ({
       file,
       preview: URL.createObjectURL(file),
-      status: "pending" as FileStatus,
+      detectedDate: null,
+      source: null,
+      confirmedDate: null,
+      detecting: true,
     }));
-    setFiles((prev) => [...prev, ...newFiles]);
+
+    setFiles((prev) => {
+      const updated = [...prev, ...newFiles];
+      return updated;
+    });
+
+    // 각 파일에 대해 날짜 감지 요청
+    const detected = await Promise.all(
+      newFiles.map(async (f) => {
+        const form = new FormData();
+        form.append("file", f.file);
+        try {
+          const res = await apiPostFormData<{ taken_at: string | null; source: DateSource }>(
+            "/photos/detect-date",
+            form
+          );
+          return { taken_at: res.taken_at, source: res.source };
+        } catch {
+          return { taken_at: null, source: null as DateSource };
+        }
+      })
+    );
+
+    setFiles((prev) => {
+      const result = [...prev];
+      const startIdx = result.length - newFiles.length;
+      detected.forEach((d, i) => {
+        const idx = startIdx + i;
+        result[idx] = {
+          ...result[idx],
+          detectedDate: d.taken_at,
+          source: d.source,
+          confirmedDate: d.taken_at ? parseISODate(d.taken_at) : null,
+          detecting: false,
+        };
+      });
+      return result;
+    });
+
+    setStep("confirm");
   };
 
-  const updateFile = (index: number, updates: Partial<UploadFile>) => {
+  const updateConfirmedDate = (index: number, date: Date) => {
     setFiles((prev) =>
-      prev.map((f, i) => (i === index ? { ...f, ...updates } : f))
+      prev.map((f, i) =>
+        i === index ? { ...f, confirmedDate: date, source: "manual" } : f
+      )
     );
   };
 
-  const uploadSingle = async (index: number, fileItem: UploadFile): Promise<UploadResponse | null> => {
-    updateFile(index, { status: "uploading" });
-
-    const formData = new FormData();
-    formData.append("file", fileItem.file);
-    if (fileItem.selectedDate) {
-      formData.append("taken_at", formatDate(fileItem.selectedDate));
-    }
-
-    try {
-      const res = await apiPostFormData<UploadResponse>("/photos/upload", formData);
-      updateFile(index, { status: "done" });
-      return res;
-    } catch (err: unknown) {
-      const error = err as Error & { status?: number };
-      if (error.status === 422 && !fileItem.selectedDate) {
-        updateFile(index, { status: "needs_date" });
-      } else {
-        updateFile(index, { status: "error", error: error.message });
-      }
-      return null;
-    }
-  };
-
   const handleUpload = async () => {
-    setUploading(true);
+    setStep("uploading");
+    setUploadProgress({ done: 0, total: files.length });
 
-    const targets = files
-      .map((f, i) => ({ file: f, index: i }))
-      .filter((x) => x.file.status === "pending" || (x.file.status === "needs_date" && x.file.selectedDate));
-
-    for (const { file, index } of targets) {
-      await uploadSingle(index, file);
+    let successCount = 0;
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const formData = new FormData();
+      formData.append("file", f.file);
+      if (f.confirmedDate) {
+        formData.append("taken_at", formatDate(f.confirmedDate));
+      }
+      try {
+        await apiPostFormData<UploadResponse>("/photos/upload", formData);
+        successCount++;
+      } catch {
+        // 개별 실패는 계속 진행
+      }
+      setUploadProgress({ done: i + 1, total: files.length });
     }
 
-    setUploading(false);
-
-    // 최신 상태 스냅샷
-    setFiles((current) => {
-      const doneCount = current.filter((f) => f.status === "done").length;
-      const needsDate = current.filter((f) => f.status === "needs_date").length;
-
-      if (doneCount > 0) {
-        toast.success(`${doneCount}장의 사진이 업로드되었습니다`);
-        if (needsDate === 0) {
-          // 모두 완료된 경우 홈으로 이동
-          setTimeout(() => navigate("/"), 800);
-        }
-      }
-      if (needsDate > 0) {
-        toast.info(`${needsDate}장의 사진에 촬영 날짜를 입력해주세요`);
-      }
-      return current;
-    });
+    if (successCount > 0) {
+      toast.success(`${successCount}장의 사진이 업로드되었습니다`);
+    }
+    if (successCount < files.length) {
+      toast.error(`${files.length - successCount}장 업로드에 실패했습니다`);
+    }
+    setTimeout(() => navigate("/"), 600);
   };
 
-  const completedCount = files.filter((f) => f.status === "done").length;
-  const progress = files.length > 0 ? (completedCount / files.length) * 100 : 0;
-  const hasPending = files.some((f) => f.status === "pending" || (f.status === "needs_date" && f.selectedDate));
+  const missingDateCount = files.filter((f) => !f.confirmedDate).length;
 
+  // ── 선택 단계 ─────────────────────────────────────────────────────────────
+  if (step === "select") {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-4 pb-tab space-y-4">
+        <h1 className="text-lg font-semibold">사진 업로드</h1>
+
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            className="flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-5 text-muted-foreground hover:border-foreground/40 hover:text-foreground active:bg-muted/30 transition-colors"
+            onClick={() => inputRef.current?.click()}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+              <circle cx="9" cy="9" r="2" />
+              <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+            </svg>
+            <span className="text-xs font-medium">갤러리</span>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/heic,image/heif"
+              multiple
+              className="hidden"
+              onChange={(e) => e.target.files && addFiles(e.target.files)}
+            />
+          </button>
+
+          <button
+            className="flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-5 text-muted-foreground hover:border-foreground/40 hover:text-foreground active:bg-muted/30 transition-colors"
+            onClick={() => cameraRef.current?.click()}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+              <circle cx="12" cy="13" r="3" />
+            </svg>
+            <span className="text-xs font-medium">카메라</span>
+            <input
+              ref={cameraRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => e.target.files && addFiles(e.target.files)}
+            />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── 업로드 중 ─────────────────────────────────────────────────────────────
+  if (step === "uploading") {
+    const pct = uploadProgress.total > 0
+      ? Math.round((uploadProgress.done / uploadProgress.total) * 100)
+      : 0;
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-4 flex flex-col items-center gap-4 pt-16">
+        <p className="text-sm font-medium">업로드 중...</p>
+        <div className="w-full max-w-xs bg-muted rounded-full h-1.5 overflow-hidden">
+          <div
+            className="h-full bg-foreground transition-all duration-300"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {uploadProgress.done} / {uploadProgress.total}
+        </p>
+      </div>
+    );
+  }
+
+  // ── 날짜 확인 단계 ────────────────────────────────────────────────────────
   return (
     <div className="max-w-2xl mx-auto px-4 py-4 pb-tab space-y-4">
-      <h1 className="text-lg font-semibold">사진 업로드</h1>
-
-      {/* 업로드 영역 */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* 갤러리에서 선택 */}
-        <button
-          className="flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-5 text-muted-foreground hover:border-foreground/40 hover:text-foreground active:bg-muted/30 transition-colors"
-          onClick={() => inputRef.current?.click()}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
-            viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-            <circle cx="9" cy="9" r="2" />
-            <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-          </svg>
-          <span className="text-xs font-medium">갤러리</span>
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/heic,image/heif"
-            multiple
-            className="hidden"
-            onChange={(e) => e.target.files && addFiles(e.target.files)}
-          />
-        </button>
-
-        {/* 카메라 촬영 */}
-        <button
-          className="flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-5 text-muted-foreground hover:border-foreground/40 hover:text-foreground active:bg-muted/30 transition-colors"
-          onClick={() => cameraRef.current?.click()}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
-            viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
-            <circle cx="12" cy="13" r="3" />
-          </svg>
-          <span className="text-xs font-medium">카메라</span>
-          <input
-            ref={cameraRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(e) => e.target.files && addFiles(e.target.files)}
-          />
-        </button>
-      </div>
-
-      {/* 진행 상태 */}
-      {files.length > 0 && (
-        <div className="space-y-1.5">
-          <Progress value={progress} className="h-1.5" />
-          <p className="text-xs text-muted-foreground text-right">
-            {completedCount} / {files.length} 완료
+      {/* 헤더 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold">날짜 확인</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            사진 {files.length}장 · 업로드 전 날짜를 확인해주세요
           </p>
         </div>
-      )}
+        <button
+          onClick={() => { setFiles([]); setStep("select"); }}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1"
+        >
+          다시 선택
+        </button>
+      </div>
 
       {/* 파일 목록 */}
       <div className="space-y-2">
         {files.map((f, i) => (
-          <Card key={i} className="overflow-hidden">
-            <CardContent className="flex items-center gap-3 p-3">
-              <img
-                src={f.preview}
-                alt=""
-                className="w-14 h-14 object-cover rounded-md flex-shrink-0"
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs truncate text-muted-foreground">{f.file.name}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge variant={statusVariant[f.status]} className="text-xs">
-                    {statusLabel[f.status]}
-                  </Badge>
-                </div>
-              </div>
+          <div key={i} className="flex items-center gap-3 py-2.5 border-b last:border-b-0">
+            {/* 썸네일 */}
+            <img
+              src={f.preview}
+              alt=""
+              className="w-14 h-14 object-cover rounded-lg flex-shrink-0 bg-muted"
+            />
 
-              {f.status === "needs_date" && (
-                <Popover>
-                  <PopoverTrigger>
-                    <div className="text-xs border rounded-lg px-2.5 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors whitespace-nowrap">
-                      {f.selectedDate ? formatDate(f.selectedDate) : "날짜 선택"}
-                    </div>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="end">
-                    <Calendar
-                      mode="single"
-                      selected={f.selectedDate}
-                      onSelect={(date) => {
-                        if (date) updateFile(i, { selectedDate: date });
-                      }}
-                    />
-                  </PopoverContent>
-                </Popover>
+            {/* 파일명 */}
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-muted-foreground truncate">{f.file.name}</p>
+            </div>
+
+            {/* 날짜 + 출처 — 오른쪽 정렬 */}
+            <div className="flex-shrink-0 flex flex-col items-end gap-1">
+              {f.detecting ? (
+                <p className="text-xs text-muted-foreground animate-pulse">확인 중...</p>
+              ) : (
+                <>
+                  {/* 날짜 선택 버튼 */}
+                  <Popover>
+                    <PopoverTrigger>
+                      <div className={`text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors
+                        ${f.confirmedDate
+                          ? "border-foreground/20 text-foreground hover:border-foreground/40"
+                          : "border-destructive/50 text-destructive hover:border-destructive"
+                        }`}>
+                        {f.confirmedDate ? formatDate(f.confirmedDate) : "날짜 입력"}
+                      </div>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="end">
+                      <Calendar
+                        mode="single"
+                        captionLayout="dropdown"
+                        fromYear={1990}
+                        toYear={new Date().getFullYear()}
+                        selected={f.confirmedDate ?? undefined}
+                        defaultMonth={f.confirmedDate ?? new Date()}
+                        onSelect={(date) => {
+                          if (date) updateConfirmedDate(i, date);
+                        }}
+                      />
+                    </PopoverContent>
+                  </Popover>
+
+                  {/* 출처 */}
+                  {f.source && (
+                    <span className={`text-[10px] ${SOURCE_COLOR[f.source]}`}>
+                      {SOURCE_LABEL[f.source]}
+                    </span>
+                  )}
+                </>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ))}
       </div>
 
-      {/* 업로드 버튼 */}
-      {files.length > 0 && (
-        <Button
-          onClick={handleUpload}
-          disabled={uploading || !hasPending}
-          className="w-full"
-        >
-          {uploading ? "업로드 중..." : "업로드 시작"}
-        </Button>
+      {/* 경고 */}
+      {missingDateCount > 0 && (
+        <p className="text-xs text-destructive">
+          날짜가 없는 사진 {missingDateCount}장 — 날짜를 입력해야 업로드됩니다
+        </p>
       )}
+
+      {/* 업로드 버튼 */}
+      <Button
+        onClick={handleUpload}
+        disabled={files.some((f) => f.detecting) || missingDateCount > 0}
+        className="w-full"
+      >
+        {files.some((f) => f.detecting)
+          ? "날짜 확인 중..."
+          : `업로드 (${files.length}장)`}
+      </Button>
     </div>
   );
 }

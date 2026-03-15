@@ -5,10 +5,20 @@ from fastapi.responses import FileResponse
 
 from database import get_db
 from models.schemas import PhotoUploadResponse
-from services.photo_service import process_upload
+from services.photo_service import detect_date, process_upload
 from services.moment_service import find_or_create_moment
 
 router = APIRouter()
+
+
+@router.post("/photos/detect-date")
+async def detect_photo_date(
+    file: UploadFile = File(...),
+):
+    """파일을 저장하지 않고 날짜와 출처만 반환한다."""
+    file_bytes = await file.read()
+    result = detect_date(file_bytes, file.filename or "")
+    return result
 
 
 @router.post("/photos/upload", response_model=PhotoUploadResponse)

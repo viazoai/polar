@@ -1,4 +1,5 @@
 import json
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -70,6 +71,34 @@ def _extract_exif(img: Image.Image) -> dict:
     return result
 
 
+_FILENAME_DATE_PATTERNS = [
+    # YYYYMMDD_HHMMSS 또는 YYYYMMDD_HHMM (숫자 prefix 없어야 함)
+    (r"(?<!\d)(\d{4})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])_(\d{2})(\d{2})(\d{2})(?!\d)", "%Y%m%d_%H%M%S"),
+    (r"(?<!\d)(\d{4})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])_(\d{2})(\d{2})(?!\d)", "%Y%m%d_%H%M"),
+    # YYYYMMDD 단독
+    (r"(?<!\d)(\d{4})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?!\d)", "%Y%m%d"),
+    # YYYY-MM-DD
+    (r"(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])", "%Y-%m-%d"),
+]
+
+
+def _extract_filename_date(filename: str) -> str | None:
+    """파일명에서 날짜를 추출한다. 성공하면 ISO 형식 문자열 반환."""
+    stem = Path(filename).stem  # 확장자 제거
+    for pattern, fmt in _FILENAME_DATE_PATTERNS:
+        m = re.search(pattern, stem)
+        if m:
+            raw = m.group(0)
+            try:
+                dt = datetime.strptime(raw, fmt)
+                # 연도 범위 검증 (1970 ~ 현재+1)
+                if 1970 <= dt.year <= datetime.now().year + 1:
+                    return dt.isoformat()
+            except ValueError:
+                continue
+    return None
+
+
 def _gps_to_decimal(coords, ref) -> float | None:
     """Convert GPS coordinates from DMS to decimal degrees."""
     if not coords or not ref:
@@ -106,10 +135,44 @@ def _generate_thumbnail(img: Image.Image, max_size: int, output_path: Path):
     thumb.save(str(output_path), "WEBP", quality=80)
 
 
-def process_upload(file_bytes: bytes, filename: str, manual_date: str | None = None) -> dict:
+def detect_date(
+    file_bytes: bytes,
+    filename: str,
+) -> dict:
+    """
+    날짜를 감지하여 taken_at과 source를 반환한다. 파일을 저장하지 않는다.
+    source: "exif" | "filename" | None
+
+    우선순위:
+      1. EXIF (파일 메타데이터 — 카메라 촬영 정보)
+      2. 파일명 패턴 (YYYYMMDD_HHMMSS 등)
+    """
+    from io import BytesIO
+
+    exif = _extract_exif(Image.open(BytesIO(file_bytes)))
+
+    if exif["taken_at"]:
+        return {"taken_at": exif["taken_at"], "source": "exif"}
+
+    if filename_date := _extract_filename_date(filename):
+        return {"taken_at": filename_date, "source": "filename"}
+
+    return {"taken_at": None, "source": None}
+
+
+def process_upload(
+    file_bytes: bytes,
+    filename: str,
+    manual_date: str | None = None,
+) -> dict:
     """
     Process an uploaded photo file.
     Returns dict with file paths, EXIF data, and metadata.
+
+    날짜 결정 우선순위:
+      1. 사용자 확인 날짜 (manual_date) — 확인 화면에서 검토/수정한 값
+      2. EXIF (파일 메타데이터 — 카메라 촬영 정보)
+      3. 파일명 패턴 (YYYYMMDD_HHMMSS 등)
     """
     from io import BytesIO
 
@@ -124,11 +187,13 @@ def process_upload(file_bytes: bytes, filename: str, manual_date: str | None = N
     exif = _extract_exif(Image.open(BytesIO(file_bytes)))  # re-open for raw EXIF
     has_exif_date = exif["taken_at"] is not None
 
-    # Determine taken_at
-    if exif["taken_at"]:
-        taken_at = exif["taken_at"]
-    elif manual_date:
+    # Determine taken_at — 우선순위 폴백 체인
+    if manual_date:
         taken_at = f"{manual_date}T00:00:00"
+    elif exif["taken_at"]:
+        taken_at = exif["taken_at"]
+    elif filename_date := _extract_filename_date(filename):
+        taken_at = filename_date
     else:
         taken_at = None
 

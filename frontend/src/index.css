@@ -150,3 +150,13 @@
     }
   }
 }
+
+/* 하단 탭 높이 변수 — 줄자 등 fixed 요소 배치에 사용 */
+:root {
+  --bottom-nav-height: calc(64px + env(safe-area-inset-bottom));
+}
+@media (min-width: 768px) {
+  :root {
+    --bottom-nav-height: 0px;
+  }
+}
