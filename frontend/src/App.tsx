@@ -5,20 +5,6 @@ import { cn } from "@/lib/utils";
 import HomePage from "@/pages/HomePage";
 import UploadPage from "@/pages/UploadPage";
 
-function HomeIcon({ active }: { active: boolean }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"
-      fill={active ? "currentColor" : "none"} stroke="currentColor"
-      strokeWidth={active ? 0 : 1.8} strokeLinecap="round" strokeLinejoin="round">
-      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-      <circle cx="9" cy="9" r="2"
-        fill={active ? "white" : "none"}
-        stroke={active ? "none" : "currentColor"} strokeWidth="1.8" />
-      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"
-        stroke={active ? "white" : "currentColor"} strokeWidth="1.8" />
-    </svg>
-  );
-}
 
 function TimelineIcon({ active }: { active: boolean }) {
   return (
@@ -46,8 +32,8 @@ function BottomNav() {
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur border-t pb-safe">
-      <div className="flex h-16">
-        {/* 추억 탭 */}
+      <div className="flex h-16 items-center">
+        {/* 추억 탭 — 남은 공간 절반의 중앙 */}
         <Link
           to="/"
           className={cn(
@@ -55,12 +41,12 @@ function BottomNav() {
             isMemory ? "text-foreground" : "text-muted-foreground"
           )}
         >
-          <HomeIcon active={isMemory} />
+          <GridIcon active={isMemory} />
           <span className="text-[10px]">추억</span>
         </Link>
 
-        {/* 업로드 중앙 FAB */}
-        <div className="flex-1 flex items-center justify-center">
+        {/* 업로드 중앙 FAB — 고정 너비 */}
+        <div className="w-20 flex items-center justify-center flex-none">
           <Link
             to="/upload"
             className="w-12 h-12 rounded-full bg-foreground text-background flex items-center justify-center shadow-md active:scale-95 transition-transform"
@@ -73,7 +59,7 @@ function BottomNav() {
           </Link>
         </div>
 
-        {/* 타임라인 탭 */}
+        {/* 타임라인 탭 — 남은 공간 절반의 중앙 */}
         <Link
           to="/?view=list"
           className={cn(
@@ -127,15 +113,15 @@ function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-3 flex items-center justify-between">
-      <Link to="/" className="text-lg font-semibold tracking-tight">
+      {/* 좌측: 로고 */}
+      <Link to="/" className="text-lg font-semibold tracking-tight min-w-0 shrink-0">
         Polar
       </Link>
 
-      <div className="flex items-center gap-2">
-        {/* 뷰 토글 — 홈 페이지, 데스크톱 전용 */}
+      {/* 중앙: 뷰 토글 — 홈 페이지, 데스크톱 전용 */}
+      <div className="absolute left-1/2 -translate-x-1/2">
         {isHome && (
           <div className="hidden md:flex items-center gap-0.5 rounded-lg border p-0.5">
-            {/* 추억 (갤러리) */}
             <button
               onClick={() => setSearchParams({})}
               className={cn(
@@ -149,7 +135,6 @@ function Header() {
               <GridIcon active={view !== "list"} />
               추억
             </button>
-            {/* 타임라인 (리스트) */}
             <button
               onClick={() => setSearchParams({ view: "list" })}
               className={cn(
@@ -165,24 +150,28 @@ function Header() {
             </button>
           </div>
         )}
-
-        {/* 데스크톱 업로드 버튼 */}
-        {!isUpload && (
-          <Link
-            to="/upload"
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "hidden md:inline-flex")}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15"
-              viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              className="mr-1.5">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            업로드
-          </Link>
-        )}
       </div>
+
+      {/* 우측: 여백 균형용 */}
+      <div className="shrink-0 w-[72px] hidden md:block" />
     </header>
+  );
+}
+
+function DesktopFab() {
+  const location = useLocation();
+  if (location.pathname === "/upload") return null;
+  return (
+    <Link
+      to="/upload"
+      className="hidden md:flex fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-foreground text-background items-center justify-center shadow-lg hover:opacity-90 active:scale-95 transition-transform"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+        viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+    </Link>
   );
 }
 
@@ -197,6 +186,7 @@ function Layout() {
         </Routes>
       </main>
       <BottomNav />
+      <DesktopFab />
     </div>
   );
 }

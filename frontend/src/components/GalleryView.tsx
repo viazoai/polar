@@ -1,5 +1,16 @@
 import { useRef, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return isMobile;
+}
 import PolaroidCard, { type MomentSummary } from "./PolaroidCard";
 
 // ─── 줄자 스크롤바 ──────────────────────────────────────────────────────────
@@ -139,6 +150,7 @@ export function TimelineRuler({
   onSeek: (fraction: number) => void;
 }) {
   const rulerRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
   const marks = buildRulerMarks(moments);
   const indicatorFraction = currentMonthFraction(moments, scrollFraction);
 
@@ -148,12 +160,16 @@ export function TimelineRuler({
     return Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
   };
 
+  // PC: 폴라로이드 중앙(50%)에서 카드 전체 너비(260px) + 줄자 너비(36px)만큼 떨어진 위치
+  // 모바일: 화면 우측 24px 고정
+  const rightPos = isMobile ? "24px" : "calc(50% - 296px)";
+
   return (
     <div
       ref={rulerRef}
       className="fixed z-40 select-none touch-none"
       style={{
-        right: "24px",
+        right: rightPos,
         top: "calc(var(--header-height) + (100dvh - var(--header-height) - var(--bottom-nav-height)) * 0.2)",
         height: "calc((100dvh - var(--header-height) - var(--bottom-nav-height)) * 0.6)",
         width: "36px",
@@ -261,6 +277,7 @@ export default function GalleryView({ moments, onSelect }: Props) {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    let isPointerDown = false;
     let isDragging = false;
     let startY = 0;
     let startScroll = 0;
@@ -282,7 +299,6 @@ export default function GalleryView({ moments, onSelect }: Props) {
       const tick = () => {
         if (Math.abs(velocity) < 0.3) {
           enableSnap();
-          // snap이 적용되도록 미세 스크롤
           el.scrollBy({ top: 0, behavior: "smooth" });
           return;
         }
@@ -296,18 +312,24 @@ export default function GalleryView({ moments, onSelect }: Props) {
     const onDown = (e: PointerEvent) => {
       if (e.pointerType === "touch") return;
       stopMomentum();
-      disableSnap();
-      isDragging = true;
+      isPointerDown = true;
+      isDragging = false;
       startY = e.clientY;
       prevY = e.clientY;
       prevTime = Date.now();
       startScroll = el.scrollTop;
       velocity = 0;
-      el.setPointerCapture(e.pointerId);
-      el.style.cursor = "grabbing";
     };
     const onMove = (e: PointerEvent) => {
-      if (!isDragging) return;
+      if (!isPointerDown) return;
+      if (!isDragging) {
+        // 5px 이상 이동 시에만 드래그 시작 (클릭과 구분)
+        if (Math.abs(e.clientY - startY) < 5) return;
+        isDragging = true;
+        disableSnap();
+        el.setPointerCapture(e.pointerId);
+        el.style.cursor = "grabbing";
+      }
       const now = Date.now();
       const dy = prevY - e.clientY;
       const dt = Math.max(1, now - prevTime);
@@ -317,6 +339,7 @@ export default function GalleryView({ moments, onSelect }: Props) {
       el.scrollTop = startScroll - (e.clientY - startY);
     };
     const onUp = () => {
+      isPointerDown = false;
       if (!isDragging) return;
       isDragging = false;
       el.style.cursor = "";
@@ -406,11 +429,14 @@ export default function GalleryView({ moments, onSelect }: Props) {
         ))}
       </div>
 
-      <TimelineRuler
-        moments={moments}
-        scrollFraction={scrollFraction}
-        onSeek={handleSeek}
-      />
+      {createPortal(
+        <TimelineRuler
+          moments={moments}
+          scrollFraction={scrollFraction}
+          onSeek={handleSeek}
+        />,
+        document.body
+      )}
     </>
   );
 }
