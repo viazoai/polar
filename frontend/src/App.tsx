@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Link, useLocation, useSearchParams } from "react-router-dom";
+import { motion } from "framer-motion";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import HomePage from "@/pages/HomePage";
@@ -22,45 +23,60 @@ function TimelineIcon({ active }: { active: boolean }) {
   );
 }
 
+function FamilyIcon({ active, size = 22 }: { active: boolean; size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function MobileFab() {
+  const location = useLocation();
+  if (location.pathname === "/upload" || location.pathname === "/family") return null;
+  return (
+    <Link
+      to="/upload"
+      className="md:hidden fixed z-50 w-13 h-13 rounded-full bg-foreground text-background flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+      style={{ bottom: "calc(64px + env(safe-area-inset-bottom) + 16px)", right: "16px" }}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"
+        viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+    </Link>
+  );
+}
+
 function BottomNav() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const isHome = location.pathname === "/";
   const view = searchParams.get("view") ?? "gallery";
 
-  const isMemory = isHome && view !== "list";
+  const isMoments = isHome && view !== "list";
   const isTimeline = isHome && view === "list";
+  const isFamily = location.pathname === "/family";
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur border-t pb-safe">
       <div className="flex h-16 items-center">
-        {/* 순간 탭 — 남은 공간 절반의 중앙 */}
         <Link
           to="/"
           className={cn(
             "flex-1 flex flex-col items-center justify-center gap-1 transition-colors",
-            isMemory ? "text-foreground" : "text-muted-foreground"
+            isMoments ? "text-foreground" : "text-muted-foreground"
           )}
         >
-          <GridIcon active={isMemory} />
-          <span className="text-[10px]">순간</span>
+          <GridIcon active={isMoments} />
+          <span className="text-[10px]">Moments</span>
         </Link>
 
-        {/* 업로드 중앙 FAB — 고정 너비 */}
-        <div className="w-20 flex items-center justify-center flex-none">
-          <Link
-            to="/upload"
-            className="w-12 h-12 rounded-full bg-foreground text-background flex items-center justify-center shadow-md active:scale-95 transition-transform"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"
-              viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </Link>
-        </div>
-
-        {/* 타임라인 탭 — 남은 공간 절반의 중앙 */}
         <Link
           to="/?view=list"
           className={cn(
@@ -69,7 +85,18 @@ function BottomNav() {
           )}
         >
           <TimelineIcon active={isTimeline} />
-          <span className="text-[10px]">타임라인</span>
+          <span className="text-[10px]">Timeline</span>
+        </Link>
+
+        <Link
+          to="/family"
+          className={cn(
+            "flex-1 flex flex-col items-center justify-center gap-1 transition-colors",
+            isFamily ? "text-foreground" : "text-muted-foreground"
+          )}
+        >
+          <FamilyIcon active={isFamily} />
+          <span className="text-[10px]">Family</span>
         </Link>
       </div>
     </nav>
@@ -107,9 +134,12 @@ function GridIcon({ active }: { active: boolean }) {
 function Header() {
   const location = useLocation();
   const isHome = location.pathname === "/";
-  const [searchParams, setSearchParams] = useSearchParams();
-  // 기본값: gallery (파라미터 없음 = gallery)
+  const isFamily = location.pathname === "/family";
+  const [searchParams] = useSearchParams();
   const view = searchParams.get("view") ?? "gallery";
+
+  const isMoments = isHome && view !== "list";
+  const isTimeline = isHome && view === "list";
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-3 flex items-center justify-between">
@@ -118,66 +148,45 @@ function Header() {
         Polar
       </Link>
 
-      {/* 중앙: 뷰 토글 — 홈 페이지, 데스크톱 전용 */}
+      {/* 중앙: 3개 탭 — 데스크톱 전용 */}
       <div className="absolute left-1/2 -translate-x-1/2">
-        {isHome && (
-          <div className="hidden md:flex items-center gap-0.5 rounded-lg border p-0.5">
-            <button
-              onClick={() => setSearchParams({})}
+        <div className="hidden md:flex items-center gap-0.5 rounded-lg border p-0.5">
+          {[
+            { to: "/", label: "Moments", active: isMoments, icon: <GridIcon active={isMoments} /> },
+            { to: "/?view=list", label: "Timeline", active: isTimeline, icon: <ListIcon active={isTimeline} /> },
+            { to: "/family", label: "Family", active: isFamily, icon: <FamilyIcon active={isFamily} size={18} /> },
+          ].map(({ to, label, active, icon }) => (
+            <Link
+              key={label}
+              to={to}
               className={cn(
-                "h-7 px-2.5 flex items-center gap-1.5 rounded-md transition-colors text-xs",
-                view !== "list"
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:text-foreground"
+                "relative h-7 px-2.5 flex items-center gap-1.5 rounded-md text-xs transition-colors z-0",
+                active ? "text-background" : "text-muted-foreground hover:text-foreground"
               )}
-              aria-label="순간 (갤러리 뷰)"
             >
-              <GridIcon active={view !== "list"} />
-              순간
-            </button>
-            <button
-              onClick={() => setSearchParams({ view: "list" })}
-              className={cn(
-                "h-7 px-2.5 flex items-center gap-1.5 rounded-md transition-colors text-xs",
-                view === "list"
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:text-foreground"
+              {active && (
+                <motion.span
+                  layoutId="header-tab-pill"
+                  className="absolute inset-0 rounded-md bg-foreground -z-10"
+                  transition={{ type: "spring", stiffness: 400, damping: 35 }}
+                />
               )}
-              aria-label="타임라인 (리스트 뷰)"
-            >
-              <ListIcon active={view === "list"} />
-              타임라인
-            </button>
-          </div>
-        )}
+              {icon}
+              {label}
+            </Link>
+          ))}
+        </div>
       </div>
 
-      {/* 우측: 가족 구성원 관리 */}
-      <div className="shrink-0 flex items-center justify-end w-[72px]">
-        <Link
-          to="/family"
-          className={cn(
-            "p-1.5 rounded-md transition-colors",
-            location.pathname === "/family" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-          )}
-          title="가족 구성원"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
-            fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-          </svg>
-        </Link>
-      </div>
+      {/* 우측: 여백 균형용 */}
+      <div className="shrink-0 w-[72px]" />
     </header>
   );
 }
 
 function DesktopFab() {
   const location = useLocation();
-  if (location.pathname === "/upload") return null;
+  if (location.pathname === "/upload" || location.pathname === "/family") return null;
   return (
     <Link
       to="/upload"
@@ -205,6 +214,7 @@ function Layout() {
           </Routes>
         </ErrorBoundary>
       </main>
+      <MobileFab />
       <BottomNav />
       <DesktopFab />
     </div>

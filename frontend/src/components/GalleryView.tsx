@@ -16,6 +16,7 @@ export default function GalleryView({ moments, onSelect }: Props) {
 
   // 카드 높이 ≈ 320px, 간격 100px → slideHeight 420px 고정
   const slideHeight = "420px";
+  // header 하단 ~ bottom-nav 상단 영역의 정중앙에 카드 배치
   const paddingV = "calc(max(20px, (100dvh - var(--header-height) - var(--bottom-nav-height) - 420px) / 2))";
 
   useEffect(() => {

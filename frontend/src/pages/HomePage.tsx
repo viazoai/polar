@@ -80,9 +80,19 @@ export default function HomePage() {
           transition={{ duration: 0.15 }}
         >
           {view === "gallery" ? (
-            <GalleryView moments={moments} onSelect={setSelectedId} />
+            <div className="relative">
+              <div className="absolute top-0 left-0 right-0 z-10 pointer-events-none max-w-lg mx-auto px-4 pt-4">
+                <h1 className="text-2xl font-semibold">Moments</h1>
+              </div>
+              <GalleryView moments={moments} onSelect={setSelectedId} />
+            </div>
           ) : (
-            <ListView moments={moments} onSelect={setSelectedId} />
+            <>
+              <div className="max-w-lg mx-auto px-4 pt-4 pb-3">
+                <h1 className="text-2xl font-semibold">Timeline</h1>
+              </div>
+              <ListView moments={moments} onSelect={setSelectedId} />
+            </>
           )}
         </motion.div>
       </AnimatePresence>

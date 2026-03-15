@@ -246,9 +246,9 @@ export default function FamilyPage() {
   };
 
   return (
-    <div className="max-w-lg mx-auto px-4 pt-4 pb-tab flex flex-col gap-4">
+    <div className="max-w-lg mx-auto px-4 pt-4 pb-tab flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">가족 구성원</h1>
+        <h1 className="text-2xl font-semibold">Family</h1>
         <Button size="sm" onClick={() => setAddDialogOpen(true)}>
           + 추가
         </Button>
