@@ -22,22 +22,6 @@
 - [x] 순간 목록/상세 API (GET /api/moments, /api/moments/{id})
 - [x] 프론트엔드: 홈페이지 (순간 카드 목록) + 업로드 페이지
 
-### 현재 구조
-
-```
-backend/
-├── main.py, config.py, database.py
-├── models/schemas.py
-├── routers/photos.py, moments.py
-└── services/photo_service.py, moment_service.py
-
-frontend/src/
-├── App.tsx (React Router)
-├── api/client.ts
-├── components/ui/ (shadcn: button, card, dialog, calendar, popover, progress, sonner, badge)
-└── pages/HomePage.tsx, UploadPage.tsx
-```
-
 ---
 
 ## 2단계: 모바일 우선 리스트 뷰 & 상세 보기 ✅ 완료
@@ -51,7 +35,7 @@ frontend/src/
 - [x] `<meta name="viewport" content="viewport-fit=cover">` 및 `<meta name="theme-color">` 설정
 - [x] safe-area 대응 (`pb-safe`, `pb-tab` 유틸리티, html/body `overflow-x: hidden`)
 - [x] `--header-height` CSS 변수로 sticky 오프셋 관리
-- [x] `useIsMobile()` hook — resize 이벤트 대응
+- [x] `useIsMobile()` hook — resize 이벤트 대응 (`src/hooks/useIsMobile.ts`)
 
 ### 2-2. 리스트 뷰 (Timeline) 개선
 
@@ -98,17 +82,15 @@ frontend/src/
 
 - [x] `GalleryView.tsx` — 세로 scroll-snap 전체 화면
   - `scroll-snap-type: y mandatory`, 슬라이드 `scroll-snap-align: center`
-  - **슬라이드 높이: `(100dvh - header) * 0.475`** → 위아래 각 26.25%씩 인접 카드 노출
-  - **첫/마지막 카드 정중앙**: `paddingTop = paddingBottom = (100dvh - header) * 0.2625` 적용
+  - 슬라이드 높이 420px 고정, 패딩으로 첫/마지막 카드 정중앙 정렬
   - `scrollPaddingBottom: var(--bottom-nav-height)` — 모바일 탭 바로 인한 중앙 오프셋 보정
   - 최대 너비 260px, 우측 `pr-14`로 줄자 스크롤바 영역 확보
 - [x] Framer Motion `whileInView` 스케일 애니메이션 (0.9→1.0, opacity 0.55→1.0), `viewport.amount: 0.85`
-- [x] **PC 마우스 관성 드래그 스크롤** — Pointer Events API
+- [x] **PC 마우스 관성 드래그 스크롤** — `useGalleryDragScroll` 훅 (`src/hooks/useGalleryDragScroll.ts`)
   - 드래그 시 `scrollSnapType: none` 임시 해제, 관성 감속(decel 0.96), velocity < 0.3 시 snap 복원
-- [x] **줄자 스크롤바 (`TimelineRuler`)** — 화면 우측 24px 이격, 화면 20%~80% 구간
-  - 세로 축선 (우측 경계 1px)
+- [x] **줄자 스크롤바 (`TimelineRuler`)** — `src/components/TimelineRuler.tsx`
+  - 화면 우측 24px 이격, 화면 20%~80% 구간
   - `buildVisualSequence()`: 연도라벨+월눈금 전체를 등간격 시퀀스로 구성
-    - 최신연도+1 경계 → 데이터 월들 → 연도 라벨(데이터 아래) → 건너뛴 연도 순서 반복
   - 연도 눈금: 10px 긴 선 + `'24` 형식 라벨
   - 월 눈금: 5px 선 + 월 숫자, **6월은 8px + font-medium 강조**
   - `currentMonthFraction()`: 선형 보간으로 인디케이터 부드럽게 이동
@@ -117,13 +99,13 @@ frontend/src/
 ### 3-3. 타임라인 뷰 (ListView) 재설계
 
 - [x] 세로 축선: left 40px, width 2.5px, rgba(0,0,0,0.10)
-- [x] `MomentRow`: 동그라미(bg-background + border 2.5px rgba(0,0,0,0.10)) + 짧은 점선 연결 + 썸네일 + 날짜우선/타이틀
-- [x] `YearLine`: 얇은 가로선(left 40px ~ right 27px) + 연도라벨(세로선과 중앙 정렬), `data-year-line` 속성
+- [x] `MomentRow` (`src/components/MomentRow.tsx`, React.memo): 동그라미 + 짧은 점선 연결 + 썸네일 + 날짜우선/타이틀
+- [x] `YearLine` (`src/components/YearLine.tsx`, React.memo): 얇은 가로선 + 연도라벨, `data-year-line` 속성
 - [x] 연도 시퀀스: 데이터 있는 연도만, 순간들이 연도라벨 **위**에 배치 (갤러리와 동일 패턴)
-- [x] **하단 고정 연도 바**: `bottom: var(--bottom-nav-height)`, bg-background(배경 마스킹), height 36px
-  - DOM `getBoundingClientRect` 기반 스크롤 하단 경계 감지
+- [x] **하단 고정 연도 바**: `bottom: var(--bottom-nav-height)`, bg-background, height 36px
+  - `IntersectionObserver` 기반 연도 감지 (layout thrashing 없음)
   - `AnimatePresence` fade 전환 (duration 0.15s)
-- [x] `--bottom-nav-height` CSS 변수 추가: 모바일 `calc(64px + env(safe-area-inset-bottom))`, 데스크톱 `0px`
+- [x] `--bottom-nav-height` CSS 변수: 모바일 `calc(64px + env(safe-area-inset-bottom))`, 데스크톱 `0px`
 
 ### 3-4. 뷰 전환
 
@@ -132,7 +114,7 @@ frontend/src/
 - [x] Framer Motion `AnimatePresence` fade 전환 (duration 0.15s)
 - [x] **하단 탭 바 재편**: 추억(갤러리) / 업로드(FAB) / 타임라인(리스트) 3탭 구조
 
-### 3-4. PWA 설정
+### 3-5. PWA 설정
 
 - [x] `vite-plugin-pwa@1.2.0` 설치 및 설정
 - [x] `manifest.webmanifest` 자동 생성
@@ -147,7 +129,7 @@ frontend/src/
 - [x] apple-touch-icon.svg 생성 및 index.html 링크
 - [ ] "홈 화면에 추가" 안내 배너 — 5단계에서 추가 예정
 
-### 현재 구조 추가분
+### 현재 구조
 
 ```
 frontend/
@@ -155,22 +137,63 @@ frontend/
 │   ├── icon.svg             # PWA 아이콘
 │   ├── apple-touch-icon.svg # iOS 홈 화면 아이콘
 │   └── offline.html         # 오프라인 폴백
-└── src/components/
-    ├── PolaroidCard.tsx      # 폴라로이드 카드
-    └── GalleryView.tsx       # scroll-snap 갤러리 + TimelineRuler
+└── src/
+    ├── hooks/
+    │   ├── useIsMobile.ts            # 모바일 판단 훅
+    │   └── useGalleryDragScroll.ts   # 갤러리 PC 드래그 훅
+    ├── lib/
+    │   └── dateUtils.ts              # 날짜 포맷 함수
+    ├── components/
+    │   ├── ErrorBoundary.tsx         # 앱 크래시 방지
+    │   ├── GalleryView.tsx           # scroll-snap 갤러리
+    │   ├── TimelineRuler.tsx         # 줄자 스크롤바 + 계산 함수
+    │   ├── ListView.tsx              # 타임라인 리스트 뷰
+    │   ├── MomentRow.tsx             # 순간 행 (React.memo)
+    │   ├── YearLine.tsx              # 연도 구분선 (React.memo)
+    │   ├── MomentDetailSheet.tsx     # 상세 보기 Sheet/Dialog
+    │   └── PolaroidCard.tsx          # 폴라로이드 카드
+    └── pages/
+        ├── HomePage.tsx              # 뷰 분기
+        └── UploadPage.tsx            # 업로드
 ```
-
-### 검증
-
-- 모바일에서 갤러리 뷰 스크롤 스냅 + 폴라로이드 카드 + 줄자 스크롤바 동작 확인
-- 첫/마지막 카드가 정중앙에서 시작/끝나는지 확인
-- PWA: `npm run build` 후 Chrome DevTools > Application 탭에서 manifest, SW 확인
-- 홈 화면 추가 후 standalone 모드 동작 확인
-- 오프라인 모드에서 이전 조회 순간/썸네일 표시 확인
 
 ---
 
-## 4단계: AI 연동
+## 리팩토링 ✅ 완료
+
+> 4단계 진입 전 코드베이스 안정성·유지보수성 개선
+
+### Phase 1 — 백엔드 안정성
+- [x] `requirements.txt` 의존성 버전 고정
+- [x] `db_connection()` context manager 도입, 커넥션 관리 일원화
+- [x] `find_or_create_moment()` 독립 commit 제거, 트랜잭션을 router로 위임
+- [x] representative photo 설정을 원자적 `UPDATE ... IS NULL`로 race condition 수정
+- [x] 파일 업로드 50MB 크기 제한 추가
+- [x] CORS 미들웨어 추가 (localhost:3200, polar.zoai.uk)
+- [x] `moments.date UNIQUE` 제약 + 주요 인덱스 추가 (신규 DB 대상)
+
+### Phase 2 — 프론트엔드 컴포넌트 분리
+- [x] `hooks/useIsMobile.ts` 추출 (중복 제거)
+- [x] `lib/dateUtils.ts` 추출 — 3종 날짜 포맷 함수 통합
+- [x] `ListView.tsx`, `MomentRow.tsx`, `YearLine.tsx` 분리 (HomePage.tsx 331줄 → 85줄)
+- [x] `TimelineRuler.tsx`, `useGalleryDragScroll.ts` 분리 (GalleryView.tsx 443줄 → 90줄)
+- [x] `ErrorBoundary.tsx` 추가
+- [x] API 에러 시 `toast.error()` 알림
+- [x] 백엔드 썸네일 크기 상수 `config.py`로 이동
+
+### Phase 3 — 성능·품질
+- [x] `MomentRow`, `YearLine` React.memo 적용
+- [x] ListView 연도 추적: `getBoundingClientRect` → `IntersectionObserver` 전환
+- [x] Pillow `_getexif()` → `getexif()` + `get_ifd()` (공개 API, Pillow 10+ 호환)
+- [x] `process_upload()` 이중 Image.open 제거
+- [x] EXIF 태그 역매핑 모듈 상수로 캐시
+- [x] backend Dockerfile CMD에서 `--reload` 제거
+- [x] frontend Dockerfile `npm install` → `npm ci`
+- [x] `.dockerignore` 파일 추가
+
+---
+
+## 4단계: AI 연동 🔜 다음
 
 > 목표: GPT-4o Vision으로 사진에 생명 불어넣기
 
@@ -222,7 +245,7 @@ frontend/
 
 ---
 
-## 5단계: 완성도 및 부가 기능
+## 5단계: 완성도 및 부가 기능 ⏳ 예정
 
 > 목표: 프로덕션 수준의 완성도 + 배포
 

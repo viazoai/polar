@@ -72,8 +72,14 @@ import { cn } from "@/lib/utils";
 
 ### 미디어 쿼리 / 반응형
 - JS에서 모바일 판단 시 `window.innerWidth` 한 번만 읽으면 안 됨 → `useIsMobile()` hook 사용
-  (`src/components/MomentDetailSheet.tsx` 참고)
+  (`src/hooks/useIsMobile.ts`)
 - CSS는 Tailwind `md:` (768px) 브레이크포인트 사용
+
+### 날짜 포맷
+날짜 관련 함수는 반드시 `src/lib/dateUtils.ts`에서 임포트한다. 컴포넌트 내 인라인 정의 금지.
+- `formatTimelineDate(dateStr)` — 타임라인 리스트용: `"3. 15 (일)"`
+- `formatCardDate(dateStr)` — 폴라로이드 카드용: `"2026. 03. 15 (일)"`
+- `formatKoreanDate(dateStr)` — 상세 보기용: `"2026년 3월 15일"`
 
 ### safe-area (노치/홈 인디케이터)
 - `pb-safe`: `env(safe-area-inset-bottom)` 패딩
@@ -85,42 +91,59 @@ import { cn } from "@/lib/utils";
 
 ### 갤러리 뷰 구조 (GalleryView.tsx)
 - 기본 뷰: 갤러리 (URL 파라미터 없음 = gallery, `?view=list` = 리스트)
-- 슬라이드 높이: `(100dvh - header) * 0.475` — 위아래 각 26.25%씩 인접 카드 노출
-- 첫/마지막 카드 정중앙: `paddingTop = paddingBottom = (100dvh - header) * 0.2625`
+- 슬라이드 높이: 420px 고정, 패딩으로 첫/마지막 카드 정중앙 정렬
 - `scroll-snap-type: y mandatory` + `scroll-snap-align: center`
 - `scrollPaddingBottom: var(--bottom-nav-height)` — 모바일 탭 바로 인한 중앙 오프셋 보정
-- PC 마우스 드래그 스크롤: Pointer Events API, scroll-snap 임시 해제 후 관성(decel 0.96) 적용, velocity < 0.3 시 snap 복원
+- PC 마우스 드래그 스크롤: `useGalleryDragScroll()` 훅 (`src/hooks/useGalleryDragScroll.ts`)
+  - Pointer Events API, scroll-snap 임시 해제 후 관성(decel 0.96) 적용, velocity < 0.3 시 snap 복원
 - Framer Motion `viewport.amount: 0.85` — 모바일 다중 활성화 방지
-- **줄자 스크롤바(`TimelineRuler`)**: 화면 우측 24px 이격, 20%~80% 구간
+- **줄자 스크롤바**: `TimelineRuler` 컴포넌트 (`src/components/TimelineRuler.tsx`)
+  - 화면 우측 24px 이격, 20%~80% 구간
   - `buildVisualSequence()`: 연도라벨+월눈금을 하나의 등간격 시퀀스로 구성
-    - 최신연도+1 경계 → 데이터 월 눈금들 → 연도 라벨(데이터 아래) → 건너뛴 연도들 순서 반복
   - `currentMonthFraction()`: 인접 항목 간 선형 보간으로 인디케이터 부드럽게 이동
   - 눈금 스타일: 연도 `'24` 형식(10px 선), 월 숫자(5px 선), 6월 강조(8px + font-medium)
+  - `buildMonthFracMap()`, `buildRulerMarks()` 도 이 파일에서 export
 
-### 타임라인 뷰 구조 (ListView in HomePage.tsx)
+### 타임라인 뷰 구조 (ListView.tsx)
 - 세로 축선: left 40px, width 2.5px, rgba(0,0,0,0.10)
 - 연도 시퀀스: 데이터 있는 연도만, 해당 연도 순간들이 연도라벨 **위**에 배치
-- **`YearLine` 컴포넌트**: `data-year-line={year}` 속성, 얇은 가로선(left 40px~right 27px) + 연도 라벨(세로선과 중앙 정렬)
-- **`MomentRow` 컴포넌트**: 동그라미(bg-background + border 2.5px rgba(0,0,0,0.10)) + 점선 연결(linear-gradient 2px dot, 5px size) + 썸네일 + 날짜우선/타이틀
+- **`YearLine` 컴포넌트** (`src/components/YearLine.tsx`): `data-year-line={year}` 속성, `React.memo` 적용
+  - 얇은 가로선(left 40px~right 27px) + 연도 라벨(세로선과 중앙 정렬)
+- **`MomentRow` 컴포넌트** (`src/components/MomentRow.tsx`): `React.memo` 적용
+  - 동그라미(bg-background + border 2.5px rgba(0,0,0,0.10)) + 점선 연결 + 썸네일 + 날짜우선/타이틀
 - **하단 고정 연도 바**: `bottom: var(--bottom-nav-height)`, bg-background, height 36px
-  - DOM `getBoundingClientRect` 기반으로 스크롤 하단 경계 밖으로 사라지는 첫 연도 감지
+  - `IntersectionObserver` 기반 연도 감지 (root = 스크롤 컨테이너, threshold 0)
   - `AnimatePresence` fade 전환으로 연도 변경 시 부드럽게 표시
 
 ### Sheet 스와이프 닫기 (SwipeableContent)
-- `MomentDetailSheet.tsx`의 `SwipeableContent` 래퍼 패턴 사용
+- `MomentDetailSheet.tsx`의 `SwipeableContent` 내부 컴포넌트 패턴 사용
 - Framer Motion `drag="y"` + `dragConstraints={{ top: 0 }}`
 - 드래그 핸들 영역만 drag 활성화, 콘텐츠 스크롤 영역은 `onPointerDown stopPropagation`으로 분리
 - 120px 초과 또는 velocity 500+ → 닫힘, 미달 → `animate(y, 0, spring)` 복귀
+
+### Error Boundary
+- `src/components/ErrorBoundary.tsx` — `App.tsx`의 `<main>` 영역을 감싸고 있음
+- 컴포넌트 크래시 시 "페이지를 새로고침해주세요" 메시지 표시
 
 ---
 
 ## 백엔드 주요 규칙
 
-- ORM 없이 `sqlite3` 직접 사용 (InAsset 패턴 동일)
+- ORM 없이 `sqlite3` 직접 사용
+- **DB 커넥션**: `database.py`의 `db_connection()` context manager 사용. `get_db()` 직접 호출 금지
+  ```python
+  from database import db_connection
+  with db_connection() as db:
+      rows = db.execute(...).fetchall()
+  ```
+- **트랜잭션**: `find_or_create_moment()`는 commit하지 않음. router에서 `db.commit()` 담당
 - 모든 라우터는 `/api` prefix로 등록
 - 사진 업로드 시 EXIF 없으면 HTTP 422 반환 → 프론트에서 날짜 입력 유도
-- 썸네일: WebP 형식, gallery(800px) / list(200px) 2종 자동 생성
+- 업로드 크기 제한: `config.py`의 `MAX_UPLOAD_SIZE` (50MB)
+- 썸네일 크기: `config.py`의 `THUMBNAIL_GALLERY_SIZE` (800px), `THUMBNAIL_LIST_SIZE` (200px)
 - HEIC 지원: `pillow_heif.register_heif_opener()` 모듈 레벨 등록
+- Pillow EXIF: `img.getexif()` + `exif.get_ifd(0x8825)` 공개 API 사용 (`_getexif()` 사용 금지)
+- CORS: `main.py`에서 `localhost:3200`, `polar.zoai.uk` 허용
 
 ---
 
@@ -131,6 +154,7 @@ import { cn } from "@/lib/utils";
 | 1단계 | ✅ 완료 | Docker 환경, FastAPI, React+shadcn/ui, 업로드/EXIF/썸네일, 순간 그룹핑 |
 | 2단계 | ✅ 완료 | 모바일 하단 탭 바, 리스트 뷰(월별 그룹), 상세 Sheet/Dialog, 스와이프 닫기 |
 | 3단계 | ✅ 완료 | 폴라로이드 갤러리(PolaroidCard+GalleryView), 줄자 스크롤바, PWA |
+| 리팩토링 | ✅ 완료 | 백엔드 안정성·프론트 컴포넌트 분리·성능 개선 (Phase 1~3) |
 | 4단계 | 🔜 다음 | GPT-4o Vision AI 연동 |
 | 5단계 | ⏳ 예정 | 필터링, 순간 편집, 폴라로이드 다운로드, 인증, 배포 |
 
@@ -142,16 +166,25 @@ import { cn } from "@/lib/utils";
 
 | 파일 | 역할 |
 |---|---|
-| `frontend/src/App.tsx` | 라우터, 헤더(뷰 토글 포함), 하단 탭 바 |
+| `frontend/src/App.tsx` | 라우터, 헤더(뷰 토글), 하단 탭 바, ErrorBoundary 적용 |
 | `frontend/src/pages/HomePage.tsx` | 뷰 상태 관리, ListView / GalleryView 분기 |
 | `frontend/src/pages/UploadPage.tsx` | 사진 업로드 (갤러리/카메라) |
+| `frontend/src/components/ListView.tsx` | 타임라인 리스트 뷰 (연도별 그룹, IntersectionObserver 연도 추적) |
+| `frontend/src/components/MomentRow.tsx` | 순간 행 컴포넌트 (React.memo) |
+| `frontend/src/components/YearLine.tsx` | 연도 구분선 컴포넌트 (React.memo) |
+| `frontend/src/components/GalleryView.tsx` | scroll-snap 갤러리 컨테이너 |
+| `frontend/src/components/TimelineRuler.tsx` | 줄자 스크롤바 + 눈금 계산 함수 |
 | `frontend/src/components/MomentDetailSheet.tsx` | 상세 보기 + SwipeableContent(스와이프 닫기) |
-| `frontend/src/components/PolaroidCard.tsx` | 폴라로이드 카드 (기울기, 그림자, Framer Motion) |
-| `frontend/src/components/GalleryView.tsx` | scroll-snap 갤러리 + TimelineRuler(줄자 스크롤바) |
+| `frontend/src/components/PolaroidCard.tsx` | 폴라로이드 카드 + MomentSummary 타입 export |
+| `frontend/src/components/ErrorBoundary.tsx` | 앱 크래시 방지 Error Boundary |
+| `frontend/src/hooks/useIsMobile.ts` | 모바일 판단 훅 (resize 이벤트 대응) |
+| `frontend/src/hooks/useGalleryDragScroll.ts` | 갤러리 PC 마우스 관성 드래그 훅 |
+| `frontend/src/lib/dateUtils.ts` | 날짜 포맷 함수 (formatTimelineDate, formatCardDate, formatKoreanDate) |
 | `frontend/src/api/client.ts` | API fetch 래퍼 |
-| `backend/main.py` | FastAPI 앱 엔트리 |
-| `backend/database.py` | SQLite 연결, 테이블 DDL |
+| `backend/main.py` | FastAPI 앱 엔트리, CORS 미들웨어 |
+| `backend/config.py` | 경로 상수, 업로드/썸네일 크기 설정 |
+| `backend/database.py` | SQLite 연결, db_connection() context manager, 테이블 DDL |
 | `backend/routers/photos.py` | 사진 업로드/서빙 API |
 | `backend/routers/moments.py` | 순간 목록/상세 API |
-| `backend/services/photo_service.py` | EXIF 추출, 썸네일 생성 |
+| `backend/services/photo_service.py` | EXIF 추출(getexif), 썸네일 생성 |
 | `backend/services/moment_service.py` | 날짜 기반 순간 생성/조회 |
