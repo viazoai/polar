@@ -153,7 +153,6 @@ function ListView({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const newestYear = parseInt(moments[0].date.slice(0, 4));
-  const oldestYear = parseInt(moments[moments.length - 1].date.slice(0, 4));
 
   // 연도별 moments 맵
   const yearMap = new Map<number, MomentSummary[]>();
@@ -183,13 +182,11 @@ function ListView({
           break;
         }
       }
-      // 모든 연도가 보이면 마지막 연도 표시
       if (!hidden && yearLines.length > 0) {
         hidden = (yearLines[yearLines.length - 1] as HTMLElement).dataset.yearLine!;
       }
       if (hidden) setCurrentYear(hidden);
     };
-    // 초기 렌더 후 계산
     requestAnimationFrame(findHiddenYear);
     el.addEventListener("scroll", findHiddenYear, { passive: true });
     return () => el.removeEventListener("scroll", findHiddenYear);
@@ -199,7 +196,7 @@ function ListView({
     <>
       {/* 현재 연도 바 — 하단 탭 바로 위, 흰색 배경으로 콘텐츠 가림 */}
       <div
-        className="fixed z-30 pointer-events-none max-w-2xl md:mx-auto left-0 right-0 bg-background"
+        className="fixed z-30 pointer-events-none left-0 right-0 bg-background"
         style={{
           bottom: "var(--bottom-nav-height)",
           height: "36px",
@@ -232,14 +229,13 @@ function ListView({
 
       <div
         ref={scrollRef}
-        className="max-w-2xl md:mx-auto"
         style={{
           height: "calc(100dvh - var(--header-height))",
           overflowY: "auto",
           overscrollBehaviorY: "contain",
         }}
       >
-        <div className="relative pb-tab">
+        <div className="relative max-w-2xl md:mx-auto pb-tab">
           {/* 세로 축선 */}
           <div
             className="absolute top-0 bottom-0 pointer-events-none"

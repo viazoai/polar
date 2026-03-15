@@ -33,7 +33,7 @@ function BottomNav() {
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur border-t pb-safe">
       <div className="flex h-16 items-center">
-        {/* 추억 탭 — 남은 공간 절반의 중앙 */}
+        {/* 순간 탭 — 남은 공간 절반의 중앙 */}
         <Link
           to="/"
           className={cn(
@@ -42,7 +42,7 @@ function BottomNav() {
           )}
         >
           <GridIcon active={isMemory} />
-          <span className="text-[10px]">추억</span>
+          <span className="text-[10px]">순간</span>
         </Link>
 
         {/* 업로드 중앙 FAB — 고정 너비 */}
@@ -130,10 +130,10 @@ function Header() {
                   ? "bg-foreground text-background"
                   : "text-muted-foreground hover:text-foreground"
               )}
-              aria-label="추억 (갤러리 뷰)"
+              aria-label="순간 (갤러리 뷰)"
             >
               <GridIcon active={view !== "list"} />
-              추억
+              순간
             </button>
             <button
               onClick={() => setSearchParams({ view: "list" })}
