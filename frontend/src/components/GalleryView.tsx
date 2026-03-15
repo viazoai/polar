@@ -259,8 +259,9 @@ export default function GalleryView({ moments, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollFraction, setScrollFraction] = useState(0);
 
-  const slideHeight = "calc((100dvh - var(--header-height)) * 0.475)";
-  const paddingV = "calc((100dvh - var(--header-height)) * 0.2625)";
+  // 카드 높이 ≈ 320px, 간격 100px → slideHeight 420px 고정
+  const slideHeight = "420px";
+  const paddingV = "calc(max(20px, (100dvh - var(--header-height) - var(--bottom-nav-height) - 420px) / 2))";
 
   useEffect(() => {
     const el = containerRef.current;
