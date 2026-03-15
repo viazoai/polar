@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
@@ -50,9 +50,12 @@ function PhotoIcon() {
 // ─── 타임라인 구성 요소 ──────────────────────────────────────────────────────
 
 /** 연도 구분선 — 연한 얇은 가로선 + 세로선 위 중앙 정렬된 연도 라벨 */
-function YearLine({ year }: { year: number }) {
+function YearLine({ year, sticky }: { year: number; sticky?: boolean }) {
   return (
-    <div className="relative h-9">
+    <div
+      data-year-line={year}
+      className={cn("relative h-9 bg-background", sticky && "sticky top-0 z-20")}
+    >
       {/* 얇고 연한 가로선 — 세로선(40px) 오른쪽만 */}
       <div
         className="absolute h-px"
@@ -90,10 +93,16 @@ function MomentRow({
         />
       </div>
 
-      {/* 연결선 — 세로선과 동일한 색, 동그라미에서 썸네일까지 */}
+      {/* 연결선 — 점선, 동그라미에서 썸네일까지 */}
       <div
-        className="absolute top-1/2 h-px"
-        style={{ left: "46px", width: "22px", backgroundColor: "rgba(0,0,0,0.10)" }}
+        className="absolute top-1/2"
+        style={{
+          left: "46px",
+          width: "22px",
+          height: "1px",
+          backgroundImage: "linear-gradient(to right, rgba(0,0,0,0.10) 2px, transparent 2px)",
+          backgroundSize: "5px 1px",
+        }}
       />
 
       <button
@@ -142,50 +151,118 @@ function ListView({
   moments: MomentSummary[];
   onSelect: (id: number) => void;
 }) {
-  const yearGroups = groupByYear(moments);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const newestYear = parseInt(moments[0].date.slice(0, 4));
+  const oldestYear = parseInt(moments[moments.length - 1].date.slice(0, 4));
+
+  // 연도별 moments 맵
+  const yearMap = new Map<number, MomentSummary[]>();
+  for (const m of moments) {
+    const y = parseInt(m.date.slice(0, 4));
+    if (!yearMap.has(y)) yearMap.set(y, []);
+    yearMap.get(y)!.push(m);
+  }
+
+  // 데이터가 있는 연도만 (내림차순)
+  const allYears = Array.from(yearMap.keys()).sort((a, b) => b - a);
+
+  // 현재 연도 추적 (스크롤 기반)
+  const [currentYear, setCurrentYear] = useState(String(newestYear));
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const findHiddenYear = () => {
+      const bottomEdge = el.getBoundingClientRect().bottom;
+      const yearLines = el.querySelectorAll("[data-year-line]");
+      let hidden = "";
+      for (const line of yearLines) {
+        const rect = (line as HTMLElement).getBoundingClientRect();
+        if (rect.top >= bottomEdge) {
+          hidden = (line as HTMLElement).dataset.yearLine!;
+          break;
+        }
+      }
+      // 모든 연도가 보이면 마지막 연도 표시
+      if (!hidden && yearLines.length > 0) {
+        hidden = (yearLines[yearLines.length - 1] as HTMLElement).dataset.yearLine!;
+      }
+      if (hidden) setCurrentYear(hidden);
+    };
+    // 초기 렌더 후 계산
+    requestAnimationFrame(findHiddenYear);
+    el.addEventListener("scroll", findHiddenYear, { passive: true });
+    return () => el.removeEventListener("scroll", findHiddenYear);
+  }, [moments]);
 
   return (
-    <div
-      className="max-w-2xl md:mx-auto"
-      style={{
-        height: "calc(100dvh - var(--header-height))",
-        overflowY: "auto",
-        overscrollBehaviorY: "contain",
-      }}
-    >
-      <div className="relative pb-tab">
-        {/* 세로 축선 — 전체 높이에 걸쳐 continuous */}
-        <div
-          className="absolute top-0 bottom-0 pointer-events-none"
-          style={{ left: "40px", width: "2.5px", backgroundColor: "rgba(0,0,0,0.10)" }}
-        />
-
-        {/* 상단 경계 연도 (newestYear + 1) */}
-        <YearLine year={newestYear + 1} />
-
-        {yearGroups.map(([year, yearMoments], yi) => (
-          <div key={year}>
-            {/* 해당 연도의 순간들 */}
-            {yearMoments.map((moment) => (
-              <MomentRow key={moment.id} moment={moment} onSelect={onSelect} />
-            ))}
-
-            {/* 연도 구분선 (해당 연도 데이터 아래) */}
-            <YearLine year={year} />
-
-            {/* 건너뛴 연도들 */}
-            {yi < yearGroups.length - 1 &&
-              (() => {
-                const nextYear = yearGroups[yi + 1][0];
-                const skipped: number[] = [];
-                for (let y = year - 1; y > nextYear; y--) skipped.push(y);
-                return skipped.map((y) => <YearLine key={y} year={y} />);
-              })()}
-          </div>
-        ))}
+    <>
+      {/* 현재 연도 바 — 하단 탭 바로 위, 흰색 배경으로 콘텐츠 가림 */}
+      <div
+        className="fixed z-30 pointer-events-none max-w-2xl md:mx-auto left-0 right-0 bg-background"
+        style={{
+          bottom: "var(--bottom-nav-height)",
+          height: "36px",
+        }}
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentYear}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="relative h-full"
+          >
+            {/* 가로선 */}
+            <div
+              className="absolute h-px"
+              style={{ top: "50%", left: "40px", right: "27px", backgroundColor: "rgba(0,0,0,0.08)" }}
+            />
+            {/* 연도 라벨 */}
+            <span
+              className="absolute z-10 bg-background px-1 text-xs font-semibold text-muted-foreground tabular-nums"
+              style={{ top: "50%", left: "41.25px", transform: "translate(-50%, -50%)" }}
+            >
+              {currentYear}
+            </span>
+          </motion.div>
+        </AnimatePresence>
       </div>
-    </div>
+
+      <div
+        ref={scrollRef}
+        className="max-w-2xl md:mx-auto"
+        style={{
+          height: "calc(100dvh - var(--header-height))",
+          overflowY: "auto",
+          overscrollBehaviorY: "contain",
+        }}
+      >
+        <div className="relative pb-tab">
+          {/* 세로 축선 */}
+          <div
+            className="absolute top-0 bottom-0 pointer-events-none"
+            style={{ left: "40px", width: "2.5px", backgroundColor: "rgba(0,0,0,0.10)" }}
+          />
+
+          {/* 연도별 시퀀스: 데이터 → 연도 라벨 (갤러리 패턴) */}
+          {allYears.map((year) => {
+            const yearMoments = yearMap.get(year);
+            return (
+              <div key={year}>
+                {/* 해당 연도의 순간들 (연도 라벨 위에 배치) */}
+                {yearMoments?.map((moment) => (
+                  <MomentRow key={moment.id} moment={moment} onSelect={onSelect} />
+                ))}
+                {/* 연도 구분선 */}
+                <YearLine year={year} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
   );
 }
 

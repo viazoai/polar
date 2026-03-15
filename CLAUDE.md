@@ -79,12 +79,32 @@ import { cn } from "@/lib/utils";
 - `pb-safe`: `env(safe-area-inset-bottom)` 패딩
 - `pb-tab`: 하단 탭(64px) + safe-area 패딩, 모든 스크롤 페이지에 적용
 
+### CSS 변수
+- `--header-height: 53px` — sticky 오프셋 계산에 사용
+- `--bottom-nav-height: calc(64px + env(safe-area-inset-bottom))` — 모바일 탭 바 높이 (md+는 0px)
+
 ### 갤러리 뷰 구조 (GalleryView.tsx)
 - 기본 뷰: 갤러리 (URL 파라미터 없음 = gallery, `?view=list` = 리스트)
-- 슬라이드 높이: `(100dvh - header) * 0.6` — 위아래 각 20%씩 인접 카드 노출 (카드 높이의 1/3)
-- 첫/마지막 카드 정중앙: `paddingTop = paddingBottom = (100dvh - header) * 0.2`
+- 슬라이드 높이: `(100dvh - header) * 0.475` — 위아래 각 26.25%씩 인접 카드 노출
+- 첫/마지막 카드 정중앙: `paddingTop = paddingBottom = (100dvh - header) * 0.2625`
 - `scroll-snap-type: y mandatory` + `scroll-snap-align: center`
-- 줄자 스크롤바(`TimelineRuler`): 화면 우측 24px 이격, 1/4~3/4 구간, 연도/월 눈금 (6월 강조)
+- `scrollPaddingBottom: var(--bottom-nav-height)` — 모바일 탭 바로 인한 중앙 오프셋 보정
+- PC 마우스 드래그 스크롤: Pointer Events API, scroll-snap 임시 해제 후 관성(decel 0.96) 적용, velocity < 0.3 시 snap 복원
+- Framer Motion `viewport.amount: 0.85` — 모바일 다중 활성화 방지
+- **줄자 스크롤바(`TimelineRuler`)**: 화면 우측 24px 이격, 20%~80% 구간
+  - `buildVisualSequence()`: 연도라벨+월눈금을 하나의 등간격 시퀀스로 구성
+    - 최신연도+1 경계 → 데이터 월 눈금들 → 연도 라벨(데이터 아래) → 건너뛴 연도들 순서 반복
+  - `currentMonthFraction()`: 인접 항목 간 선형 보간으로 인디케이터 부드럽게 이동
+  - 눈금 스타일: 연도 `'24` 형식(10px 선), 월 숫자(5px 선), 6월 강조(8px + font-medium)
+
+### 타임라인 뷰 구조 (ListView in HomePage.tsx)
+- 세로 축선: left 40px, width 2.5px, rgba(0,0,0,0.10)
+- 연도 시퀀스: 데이터 있는 연도만, 해당 연도 순간들이 연도라벨 **위**에 배치
+- **`YearLine` 컴포넌트**: `data-year-line={year}` 속성, 얇은 가로선(left 40px~right 27px) + 연도 라벨(세로선과 중앙 정렬)
+- **`MomentRow` 컴포넌트**: 동그라미(bg-background + border 2.5px rgba(0,0,0,0.10)) + 점선 연결(linear-gradient 2px dot, 5px size) + 썸네일 + 날짜우선/타이틀
+- **하단 고정 연도 바**: `bottom: var(--bottom-nav-height)`, bg-background, height 36px
+  - DOM `getBoundingClientRect` 기반으로 스크롤 하단 경계 밖으로 사라지는 첫 연도 감지
+  - `AnimatePresence` fade 전환으로 연도 변경 시 부드럽게 표시
 
 ### Sheet 스와이프 닫기 (SwipeableContent)
 - `MomentDetailSheet.tsx`의 `SwipeableContent` 래퍼 패턴 사용

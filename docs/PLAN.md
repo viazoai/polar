@@ -1,6 +1,6 @@
 # Polar 개발 계획서
 
-> 최종 수정: 2026-03-14
+> 최종 수정: 2026-03-15
 
 ---
 
@@ -98,22 +98,39 @@ frontend/src/
 
 - [x] `GalleryView.tsx` — 세로 scroll-snap 전체 화면
   - `scroll-snap-type: y mandatory`, 슬라이드 `scroll-snap-align: center`
-  - **슬라이드 높이: `(100dvh - header) * 0.6`** → 위아래 각 20%씩 인접 카드 노출 (카드 높이 기준 1/3 간격)
-  - **첫/마지막 카드 정중앙**: `paddingTop = paddingBottom = (100dvh - header) * 0.2` 적용
+  - **슬라이드 높이: `(100dvh - header) * 0.475`** → 위아래 각 26.25%씩 인접 카드 노출
+  - **첫/마지막 카드 정중앙**: `paddingTop = paddingBottom = (100dvh - header) * 0.2625` 적용
+  - `scrollPaddingBottom: var(--bottom-nav-height)` — 모바일 탭 바로 인한 중앙 오프셋 보정
   - 최대 너비 260px, 우측 `pr-14`로 줄자 스크롤바 영역 확보
-- [x] Framer Motion `whileInView` 스케일 애니메이션 (0.9→1.0, opacity 0.55→1.0)
-- [x] **줄자 스크롤바 (`TimelineRuler`)** — 화면 우측 24px 이격, 화면 1/4~3/4 구간
+- [x] Framer Motion `whileInView` 스케일 애니메이션 (0.9→1.0, opacity 0.55→1.0), `viewport.amount: 0.85`
+- [x] **PC 마우스 관성 드래그 스크롤** — Pointer Events API
+  - 드래그 시 `scrollSnapType: none` 임시 해제, 관성 감속(decel 0.96), velocity < 0.3 시 snap 복원
+- [x] **줄자 스크롤바 (`TimelineRuler`)** — 화면 우측 24px 이격, 화면 20%~80% 구간
   - 세로 축선 (우측 경계 1px)
+  - `buildVisualSequence()`: 연도라벨+월눈금 전체를 등간격 시퀀스로 구성
+    - 최신연도+1 경계 → 데이터 월들 → 연도 라벨(데이터 아래) → 건너뛴 연도 순서 반복
   - 연도 눈금: 10px 긴 선 + `'24` 형식 라벨
-  - 월 눈금: 7px 선 + 월 숫자, **6월은 11px + font-medium 강조**
-  - 현재 위치 인디케이터: 수평 선 + 삼각형 마커 (스크롤 추적)
+  - 월 눈금: 5px 선 + 월 숫자, **6월은 8px + font-medium 강조**
+  - `currentMonthFraction()`: 선형 보간으로 인디케이터 부드럽게 이동
   - 클릭/터치 드래그 → 해당 시점으로 smooth scroll 이동
 
-### 3-3. 뷰 전환
+### 3-3. 타임라인 뷰 (ListView) 재설계
+
+- [x] 세로 축선: left 40px, width 2.5px, rgba(0,0,0,0.10)
+- [x] `MomentRow`: 동그라미(bg-background + border 2.5px rgba(0,0,0,0.10)) + 짧은 점선 연결 + 썸네일 + 날짜우선/타이틀
+- [x] `YearLine`: 얇은 가로선(left 40px ~ right 27px) + 연도라벨(세로선과 중앙 정렬), `data-year-line` 속성
+- [x] 연도 시퀀스: 데이터 있는 연도만, 순간들이 연도라벨 **위**에 배치 (갤러리와 동일 패턴)
+- [x] **하단 고정 연도 바**: `bottom: var(--bottom-nav-height)`, bg-background(배경 마스킹), height 36px
+  - DOM `getBoundingClientRect` 기반 스크롤 하단 경계 감지
+  - `AnimatePresence` fade 전환 (duration 0.15s)
+- [x] `--bottom-nav-height` CSS 변수 추가: 모바일 `calc(64px + env(safe-area-inset-bottom))`, 데스크톱 `0px`
+
+### 3-4. 뷰 전환
 
 - [x] 헤더 우측 리스트/갤러리 토글 버튼 (커스텀 SVG 아이콘, 활성 상태 반전)
 - [x] URL search param 관리: 파라미터 없음 = 갤러리(기본), `?view=list` = 리스트
 - [x] Framer Motion `AnimatePresence` fade 전환 (duration 0.15s)
+- [x] **하단 탭 바 재편**: 추억(갤러리) / 업로드(FAB) / 타임라인(리스트) 3탭 구조
 
 ### 3-4. PWA 설정
 

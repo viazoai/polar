@@ -243,8 +243,8 @@ export default function GalleryView({ moments, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollFraction, setScrollFraction] = useState(0);
 
-  const slideHeight = "calc((100dvh - var(--header-height)) * 0.6)";
-  const paddingV = "calc((100dvh - var(--header-height)) * 0.2)";
+  const slideHeight = "calc((100dvh - var(--header-height)) * 0.475)";
+  const paddingV = "calc((100dvh - var(--header-height)) * 0.2625)";
 
   useEffect(() => {
     const el = containerRef.current;
@@ -255,6 +255,90 @@ export default function GalleryView({ moments, onSelect }: Props) {
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // PC 마우스 드래그 스크롤 (관성 + snap 제어)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    let isDragging = false;
+    let startY = 0;
+    let startScroll = 0;
+    let prevY = 0;
+    let prevTime = 0;
+    let velocity = 0;
+    let rafId = 0;
+
+    const disableSnap = () => { el.style.scrollSnapType = "none"; };
+    const enableSnap = () => { el.style.scrollSnapType = "y mandatory"; };
+
+    const stopMomentum = () => {
+      if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+    };
+
+    const startMomentum = () => {
+      stopMomentum();
+      const decel = 0.96;
+      const tick = () => {
+        if (Math.abs(velocity) < 0.3) {
+          enableSnap();
+          // snap이 적용되도록 미세 스크롤
+          el.scrollBy({ top: 0, behavior: "smooth" });
+          return;
+        }
+        el.scrollTop += velocity;
+        velocity *= decel;
+        rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
+    };
+
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType === "touch") return;
+      stopMomentum();
+      disableSnap();
+      isDragging = true;
+      startY = e.clientY;
+      prevY = e.clientY;
+      prevTime = Date.now();
+      startScroll = el.scrollTop;
+      velocity = 0;
+      el.setPointerCapture(e.pointerId);
+      el.style.cursor = "grabbing";
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!isDragging) return;
+      const now = Date.now();
+      const dy = prevY - e.clientY;
+      const dt = Math.max(1, now - prevTime);
+      velocity = dy / dt * 16;
+      prevY = e.clientY;
+      prevTime = now;
+      el.scrollTop = startScroll - (e.clientY - startY);
+    };
+    const onUp = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      el.style.cursor = "";
+      if (Math.abs(velocity) > 1) {
+        startMomentum();
+      } else {
+        enableSnap();
+        el.scrollBy({ top: 0, behavior: "smooth" });
+      }
+    };
+
+    el.addEventListener("pointerdown", onDown);
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onUp);
+    return () => {
+      stopMomentum();
+      el.removeEventListener("pointerdown", onDown);
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onUp);
+    };
   }, []);
 
   /**
@@ -292,10 +376,11 @@ export default function GalleryView({ moments, onSelect }: Props) {
           height: "calc(100dvh - var(--header-height))",
           overflowY: "scroll",
           scrollSnapType: "y mandatory",
+          scrollPaddingBottom: "var(--bottom-nav-height)",
           WebkitOverflowScrolling: "touch",
           overscrollBehaviorY: "contain",
           paddingTop: paddingV,
-          paddingBottom: paddingV,
+          paddingBottom: `calc(${paddingV} + var(--bottom-nav-height))`,
         }}
       >
         {moments.map((moment, i) => (
@@ -307,7 +392,7 @@ export default function GalleryView({ moments, onSelect }: Props) {
             <motion.div
               initial={{ scale: 0.9, opacity: 0.55 }}
               whileInView={{ scale: 1, opacity: 1 }}
-              viewport={{ amount: 0.65 }}
+              viewport={{ amount: 0.85 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
               className="w-full max-w-[260px]"
             >
