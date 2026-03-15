@@ -1,4 +1,7 @@
 import sqlite3
+from contextlib import contextmanager
+from typing import Generator
+
 from config import DB_PATH
 
 
@@ -7,6 +10,16 @@ def get_db() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+@contextmanager
+def db_connection() -> Generator[sqlite3.Connection, None, None]:
+    """DB 커넥션을 자동으로 닫아주는 context manager."""
+    conn = get_db()
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def init_db():
@@ -31,7 +44,7 @@ def init_db():
 
         CREATE TABLE IF NOT EXISTS moments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date DATE NOT NULL,
+            date DATE NOT NULL UNIQUE,
             title TEXT,
             diary TEXT,
             location TEXT,
@@ -61,6 +74,10 @@ def init_db():
             is_confirmed BOOLEAN NOT NULL DEFAULT 0,
             PRIMARY KEY (photo_id, family_member_id)
         );
+
+        CREATE INDEX IF NOT EXISTS idx_moments_date ON moments(date);
+        CREATE INDEX IF NOT EXISTS idx_photos_moment_id ON photos(moment_id);
+        CREATE INDEX IF NOT EXISTS idx_photos_taken_at ON photos(taken_at);
     """)
     conn.commit()
     conn.close()

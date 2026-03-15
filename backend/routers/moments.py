@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from database import get_db
+from database import db_connection
 from models.schemas import MomentSummary, MomentDetail, PhotoInfo
 
 router = APIRouter()
@@ -8,31 +8,30 @@ router = APIRouter()
 
 @router.get("/moments", response_model=list[MomentSummary])
 async def list_moments(year: int | None = None, month: int | None = None):
-    db = get_db()
-    try:
-        query = """
-            SELECT m.id, m.date, m.title, m.representative_photo_id,
-                   COUNT(p.id) AS photo_count,
-                   rp.thumbnail_list AS representative_thumbnail
-            FROM moments m
-            LEFT JOIN photos p ON p.moment_id = m.id
-            LEFT JOIN photos rp ON rp.id = m.representative_photo_id
-        """
-        conditions = []
-        params = []
+    query = """
+        SELECT m.id, m.date, m.title, m.representative_photo_id,
+               COUNT(p.id) AS photo_count,
+               rp.thumbnail_list AS representative_thumbnail
+        FROM moments m
+        LEFT JOIN photos p ON p.moment_id = m.id
+        LEFT JOIN photos rp ON rp.id = m.representative_photo_id
+    """
+    conditions = []
+    params = []
 
-        if year is not None:
-            conditions.append("CAST(strftime('%Y', m.date) AS INTEGER) = ?")
-            params.append(year)
-        if month is not None:
-            conditions.append("CAST(strftime('%m', m.date) AS INTEGER) = ?")
-            params.append(month)
+    if year is not None:
+        conditions.append("CAST(strftime('%Y', m.date) AS INTEGER) = ?")
+        params.append(year)
+    if month is not None:
+        conditions.append("CAST(strftime('%m', m.date) AS INTEGER) = ?")
+        params.append(month)
 
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
 
-        query += " GROUP BY m.id ORDER BY m.date DESC"
+    query += " GROUP BY m.id ORDER BY m.date DESC"
 
+    with db_connection() as db:
         rows = db.execute(query, params).fetchall()
         return [
             MomentSummary(
@@ -45,14 +44,11 @@ async def list_moments(year: int | None = None, month: int | None = None):
             )
             for row in rows
         ]
-    finally:
-        db.close()
 
 
 @router.get("/moments/{moment_id}", response_model=MomentDetail)
 async def get_moment(moment_id: int):
-    db = get_db()
-    try:
+    with db_connection() as db:
         moment = db.execute(
             "SELECT id, date, title, diary, location FROM moments WHERE id = ?",
             (moment_id,),
@@ -83,5 +79,3 @@ async def get_moment(moment_id: int):
                 for p in photos
             ],
         )
-    finally:
-        db.close()

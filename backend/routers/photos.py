@@ -3,7 +3,8 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from database import get_db
+from config import MAX_UPLOAD_SIZE
+from database import db_connection
 from models.schemas import PhotoUploadResponse
 from services.photo_service import detect_date, process_upload
 from services.moment_service import find_or_create_moment
@@ -17,6 +18,8 @@ async def detect_photo_date(
 ):
     """파일을 저장하지 않고 날짜와 출처만 반환한다."""
     file_bytes = await file.read()
+    if len(file_bytes) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="파일 크기가 50MB를 초과합니다")
     result = detect_date(file_bytes, file.filename or "")
     return result
 
@@ -28,6 +31,9 @@ async def upload_photo(
     uploaded_by: int | None = Form(None),
 ):
     file_bytes = await file.read()
+    if len(file_bytes) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="파일 크기가 50MB를 초과합니다")
+
     result = process_upload(file_bytes, file.filename or "photo.jpg", taken_at)
 
     if "error" in result:
@@ -36,8 +42,7 @@ async def upload_photo(
             detail="촬영 날짜를 입력해주세요 (EXIF 정보가 없습니다)",
         )
 
-    db = get_db()
-    try:
+    with db_connection() as db:
         # Find or create moment by date
         date_str = result["taken_at"][:10]  # YYYY-MM-DD
         moment_id = find_or_create_moment(db, date_str)
@@ -62,16 +67,11 @@ async def upload_photo(
         )
         photo_id = cursor.lastrowid
 
-        # Set as representative photo if moment doesn't have one
-        moment = db.execute(
-            "SELECT representative_photo_id FROM moments WHERE id = ?",
-            (moment_id,),
-        ).fetchone()
-        if moment["representative_photo_id"] is None:
-            db.execute(
-                "UPDATE moments SET representative_photo_id = ? WHERE id = ?",
-                (photo_id, moment_id),
-            )
+        # 대표 사진이 없을 때만 원자적으로 설정 (race condition 방지)
+        db.execute(
+            "UPDATE moments SET representative_photo_id = ? WHERE id = ? AND representative_photo_id IS NULL",
+            (photo_id, moment_id),
+        )
 
         db.commit()
 
@@ -84,14 +84,11 @@ async def upload_photo(
             taken_at=result["taken_at"],
             has_exif_date=result["has_exif_date"],
         )
-    finally:
-        db.close()
 
 
 @router.get("/photos/{photo_id}/file")
 async def get_photo_file(photo_id: int):
-    db = get_db()
-    try:
+    with db_connection() as db:
         row = db.execute("SELECT file_path FROM photos WHERE id = ?", (photo_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="사진을 찾을 수 없습니다")
@@ -99,8 +96,6 @@ async def get_photo_file(photo_id: int):
         if not path.exists():
             raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
         return FileResponse(str(path))
-    finally:
-        db.close()
 
 
 @router.get("/photos/{photo_id}/thumbnail/{size}")
@@ -108,9 +103,8 @@ async def get_thumbnail(photo_id: int, size: str):
     if size not in ("gallery", "list"):
         raise HTTPException(status_code=400, detail="size는 'gallery' 또는 'list'여야 합니다")
 
-    db = get_db()
-    try:
-        col = "thumbnail_gallery" if size == "gallery" else "thumbnail_list"
+    col = "thumbnail_gallery" if size == "gallery" else "thumbnail_list"
+    with db_connection() as db:
         row = db.execute(f"SELECT {col} FROM photos WHERE id = ?", (photo_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="사진을 찾을 수 없습니다")
@@ -118,5 +112,3 @@ async def get_thumbnail(photo_id: int, size: str):
         if not path.exists():
             raise HTTPException(status_code=404, detail="썸네일을 찾을 수 없습니다")
         return FileResponse(str(path), media_type="image/webp")
-    finally:
-        db.close()
