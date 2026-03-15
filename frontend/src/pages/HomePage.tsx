@@ -12,8 +12,10 @@ import { apiGet } from "@/api/client";
 // ─── 유틸 ────────────────────────────────────────────────────────────────────
 
 function formatShortDate(dateStr: string): string {
-  const [, m, d] = dateStr.split("-");
-  return `${parseInt(m)}월 ${parseInt(d)}일`;
+  const [y, m, d] = dateStr.split("-");
+  const days = ["일", "월", "화", "수", "목", "금", "토"];
+  const dow = days[new Date(Number(y), Number(m) - 1, Number(d)).getDay()];
+  return `${parseInt(m)}. ${parseInt(d)} (${dow})`;
 }
 
 function groupByYear(moments: MomentSummary[]): [number, MomentSummary[]][] {
@@ -63,7 +65,7 @@ function YearLine({ year, sticky }: { year: number; sticky?: boolean }) {
       />
       {/* 연도 라벨 — 세로선(center 41.25px) 중앙 정렬, 배경으로 가로선 마스킹 */}
       <span
-        className="absolute z-10 bg-background px-1 text-xs font-semibold text-muted-foreground tabular-nums"
+        className="absolute z-10 bg-background px-2 text-xs font-semibold text-muted-foreground tabular-nums"
         style={{ top: "50%", left: "41.25px", transform: "translate(-50%, -50%)" }}
       >
         {year}

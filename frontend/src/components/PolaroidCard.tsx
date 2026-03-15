@@ -28,7 +28,9 @@ const STACK_OFFSETS = [
 
 function formatShortDate(dateStr: string): string {
   const [y, m, d] = dateStr.split("-");
-  return `${y}. ${parseInt(m)}. ${parseInt(d)}`;
+  const days = ["일", "월", "화", "수", "목", "금", "토"];
+  const dow = days[new Date(Number(y), Number(m) - 1, Number(d)).getDay()];
+  return `${y}. ${m}. ${d} (${dow})`;
 }
 
 function PhotoPlaceholder() {
