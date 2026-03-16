@@ -1,8 +1,9 @@
 import logging
+from io import BytesIO
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse, Response
 
 from config import MAX_UPLOAD_SIZE
 from database import db_connection
@@ -10,9 +11,11 @@ from models.schemas import PhotoUploadResponse
 from services.photo_service import detect_date, process_upload
 from services.moment_service import find_or_create_moment
 from services.ai_pipeline import run_ai_analysis
+from services.auth_service import get_current_user
+from services.polaroid_service import generate_polaroid
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 @router.post("/photos/detect-date")
@@ -159,6 +162,31 @@ async def delete_photo(photo_id: int):
             pass
 
     return {"ok": True}
+
+
+@router.get("/photos/{photo_id}/polaroid")
+async def get_polaroid(photo_id: int):
+    """폴라로이드 스타일 이미지를 합성하여 반환한다."""
+    with db_connection() as db:
+        row = db.execute(
+            """SELECT p.file_path, m.title, m.date
+               FROM photos p JOIN moments m ON m.id = p.moment_id
+               WHERE p.id = ?""",
+            (photo_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="사진을 찾을 수 없습니다")
+
+    path = Path(row["file_path"])
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+
+    image_bytes = generate_polaroid(path, row["title"], row["date"])
+    return Response(
+        content=image_bytes,
+        media_type="image/jpeg",
+        headers={"Content-Disposition": f'attachment; filename="polar_{photo_id}.jpg"'},
+    )
 
 
 @router.get("/photos/{photo_id}/file")

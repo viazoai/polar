@@ -10,14 +10,15 @@ import json
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from services.auth_service import get_current_user
 
 from config import REFERENCES_DIR
 from database import db_connection
 from models.schemas import FamilyMember, FamilyMemberCreate, FamilyMemberUpdate
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 @router.get("/family", response_model=list[FamilyMember])

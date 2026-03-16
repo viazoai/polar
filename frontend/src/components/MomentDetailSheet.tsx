@@ -47,6 +47,8 @@ interface Props {
   onClose: () => void;
   onDeleted?: (id: number) => void;
   onUpdated?: (detail: MomentDetail) => void;
+  onSplit?: () => void;
+  onMerged?: (sourceId: number) => void;
 }
 
 // ─── 사진 캐러셀 ──────────────────────────────────────────────────────────────
@@ -57,12 +59,14 @@ function PhotoCarousel({
   onSetRepresentative,
   onDeletePhoto,
   onPhotoFilesSelected,
+  onDownload,
 }: {
   photos: PhotoInfo[];
   representativeId?: number | null;
   onSetRepresentative?: (photoId: number) => void;
   onDeletePhoto?: (photoId: number) => void;
   onPhotoFilesSelected?: (files: FileList) => void;
+  onDownload?: (photoId: number) => void;
 }) {
   // 대표 사진을 맨 앞으로 정렬
   const photos = [...rawPhotos].sort((a, b) => {
@@ -175,6 +179,14 @@ function PhotoCarousel({
             </div>
           ) : <div />}
           <div className="flex gap-1">
+            {!onDeletePhoto && onDownload && (
+              <button
+                onClick={() => onDownload(photos[current].id)}
+                className="bg-black/50 text-white text-xs px-2 py-0.5 rounded-full hover:bg-black/70 transition-colors"
+              >
+                다운로드
+              </button>
+            )}
             {photos.length > 1 && onSetRepresentative && !isCurrentRepresentative && (
               <button
                 onClick={() => onSetRepresentative(photos[current].id)}
@@ -264,21 +276,36 @@ function DetailContent({
   onMomentChange,
   onClose,
   onDeleted,
+  onSplit,
+  onMerged,
 }: {
   moment: MomentDetail;
   familyMembers: FamilyMember[];
   onMomentChange: (m: MomentDetail) => void;
   onClose: () => void;
   onDeleted?: (id: number) => void;
+  onSplit?: () => void;
+  onMerged?: (sourceId: number) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(moment.title ?? "");
   const [editDiary, setEditDiary] = useState(moment.diary ?? "");
+  const [editDate, setEditDate] = useState(moment.date);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const actionBarRef = useRef<HTMLDivElement>(null);
+
+  // 분리 모드
+  const [splitMode, setSplitMode] = useState(false);
+  const [selectedForSplit, setSelectedForSplit] = useState<Set<number>>(new Set());
+  const [isSplitting, setIsSplitting] = useState(false);
+
+  // 병합
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [mergeMoments, setMergeMoments] = useState<Array<{ id: number; date: string; title: string | null }>>([]);
+  const [isMerging, setIsMerging] = useState(false);
 
   // 편집 중 로컬 보류 상태 (저장 전까지 서버 미반영)
   const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<number>>(new Set());
@@ -298,9 +325,12 @@ function DetailContent({
   const startEdit = () => {
     setEditTitle(moment.title ?? "");
     setEditDiary(moment.diary ?? "");
+    setEditDate(moment.date);
     setPendingDeleteIds(new Set());
     setPendingRepresentativeId(undefined);
     setPendingAddedPhotos([]);
+    setSplitMode(false);
+    setSelectedForSplit(new Set());
     setIsEditing(true);
   };
 
@@ -308,6 +338,7 @@ function DetailContent({
   const hasChanges = () => {
     if ((editTitle.trim() || null) !== (moment.title ?? null)) return true;
     if ((editDiary.trim() || null) !== (moment.diary ?? null)) return true;
+    if (editDate !== moment.date) return true;
     if (pendingDeleteIds.size > 0) return true;
     if (pendingRepresentativeId !== undefined) return true;
     if (pendingAddedPhotos.length > 0) return true;
@@ -357,6 +388,9 @@ function DetailContent({
     setPendingAddedPhotos([]);
     setEditTitle(moment.title ?? "");
     setEditDiary(moment.diary ?? "");
+    setEditDate(moment.date);
+    setSplitMode(false);
+    setSelectedForSplit(new Set());
     setShowCancelDialog(false);
     setIsEditing(false);
   };
@@ -372,11 +406,13 @@ function DetailContent({
       if (pendingRepresentativeId !== undefined && pendingRepresentativeId !== null) {
         await apiPatch(`/photos/${pendingRepresentativeId}/set-representative`, {});
       }
-      // 3) 텍스트 저장
-      await apiPatch(`/moments/${moment.id}`, {
+      // 3) 텍스트 + 날짜 저장
+      const patchBody: Record<string, unknown> = {
         title: editTitle.trim() || null,
         diary: editDiary.trim() || null,
-      });
+      };
+      if (editDate !== moment.date) patchBody.date = editDate;
+      await apiPatch(`/moments/${moment.id}`, patchBody);
       // 서버에서 최신 상태 가져와서 반영
       const updated = await apiGet<MomentDetail>(`/moments/${moment.id}`);
       onMomentChange(updated);
@@ -388,6 +424,83 @@ function DetailContent({
       toast.error("저장에 실패했습니다");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDownload = async (photoId: number) => {
+    const url = `/api/photos/${photoId}/file`;
+    try {
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("fetch failed");
+      const blob = await res.blob();
+      const ext = blob.type.includes("png") ? "png" : blob.type.includes("heic") ? "heic" : "jpg";
+      const filename = `photo_${photoId}.${ext}`;
+      if (typeof navigator !== "undefined" && "share" in navigator && /mobile|android|iphone|ipad/i.test(navigator.userAgent)) {
+        const file = new File([blob], filename, { type: blob.type });
+        await navigator.share({ files: [file], title: moment.title ?? "Polar" });
+      } else {
+        const objUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = objUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objUrl);
+      }
+    } catch {
+      toast.error("다운로드에 실패했습니다");
+    }
+  };
+
+  const handleSplit = async () => {
+    if (selectedForSplit.size === 0) return;
+    setIsSplitting(true);
+    try {
+      const res = await apiPost<{ new_moment_id: number }>(`/moments/${moment.id}/split`, {
+        photo_ids: Array.from(selectedForSplit),
+      });
+      toast.success("새 순간으로 분리되었습니다");
+      setSplitMode(false);
+      setSelectedForSplit(new Set());
+      // 현재 순간 새로고침
+      const updated = await apiGet<MomentDetail>(`/moments/${moment.id}`);
+      onMomentChange(updated);
+      onSplit?.();
+      // 분리된 순간으로 이동
+      void res.new_moment_id;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "알 수 없는 오류";
+      toast.error(`분리 실패: ${msg}`);
+    } finally {
+      setIsSplitting(false);
+    }
+  };
+
+  const openMergeDialog = async () => {
+    try {
+      const all = await apiGet<Array<{ id: number; date: string; title: string | null }>>("/moments");
+      setMergeMoments(all.filter((m) => m.id !== moment.id));
+      setShowMergeDialog(true);
+    } catch {
+      toast.error("순간 목록을 불러오지 못했습니다");
+    }
+  };
+
+  const handleMerge = async (sourceId: number) => {
+    setIsMerging(true);
+    try {
+      await apiPost(`/moments/${moment.id}/merge`, { source_moment_id: sourceId });
+      toast.success("순간이 병합되었습니다");
+      setShowMergeDialog(false);
+      const updated = await apiGet<MomentDetail>(`/moments/${moment.id}`);
+      onMomentChange(updated);
+      onMerged?.(sourceId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "알 수 없는 오류";
+      toast.error(`병합 실패: ${msg}`);
+    } finally {
+      setIsMerging(false);
     }
   };
 
@@ -500,6 +613,7 @@ function DetailContent({
         onSetRepresentative={isEditing ? handleSetRepresentative : undefined}
         onDeletePhoto={isEditing ? handleDeletePhoto : undefined}
         onPhotoFilesSelected={isEditing ? handlePhotoFilesSelected : undefined}
+        onDownload={!isEditing ? handleDownload : undefined}
       />
 
       {/* 제목 + 날짜 */}
@@ -537,7 +651,16 @@ function DetailContent({
           </div>
         )}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{formatKoreanDate(moment.date)}</span>
+          {isEditing ? (
+            <input
+              type="date"
+              value={editDate}
+              onChange={(e) => setEditDate(e.target.value)}
+              className="border border-input rounded px-1.5 py-0.5 bg-transparent outline-none focus:ring-1 focus:ring-ring text-xs"
+            />
+          ) : (
+            <span>{formatKoreanDate(moment.date)}</span>
+          )}
           {moment.location && <><span>·</span><span>{moment.location}</span></>}
         </div>
       </div>
@@ -608,6 +731,61 @@ function DetailContent({
           )}
         </div>
 
+        {/* 편집 모드: 분리/병합 버튼 */}
+        {isEditing && visiblePhotos.length > 1 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {splitMode ? (
+              <>
+                <p className="text-xs text-muted-foreground flex-1">
+                  분리할 사진을 선택하세요 ({selectedForSplit.size}장 선택됨)
+                </p>
+                <Button variant="ghost" size="sm" onClick={() => { setSplitMode(false); setSelectedForSplit(new Set()); }}>
+                  취소
+                </Button>
+                <Button size="sm" disabled={selectedForSplit.size === 0 || isSplitting} onClick={handleSplit}>
+                  {isSplitting ? "분리 중..." : "분리"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => setSplitMode(true)}>
+                  사진 분리
+                </Button>
+                <Button variant="outline" size="sm" className="text-xs" onClick={openMergeDialog}>
+                  순간 병합
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* 분리 모드: 썸네일에 체크 오버레이 */}
+        {isEditing && splitMode && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1">
+            {visiblePhotos.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setSelectedForSplit((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(p.id)) next.delete(p.id);
+                  else next.add(p.id);
+                  return next;
+                })}
+                className={`relative flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition-all ${
+                  selectedForSplit.has(p.id) ? "border-primary opacity-100" : "border-transparent opacity-50"
+                }`}
+              >
+                <img src={`/api/photos/${p.id}/thumbnail/list`} alt="" className="w-full h-full object-cover" />
+                {selectedForSplit.has(p.id) && (
+                  <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                    <div className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">✓</div>
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* 하단 액션 바 */}
         <div ref={actionBarRef} className="flex items-center justify-between pb-safe">
           {isEditing ? (
@@ -668,6 +846,33 @@ function DetailContent({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 병합 대상 선택 다이얼로그 */}
+      <Dialog open={showMergeDialog} onOpenChange={setShowMergeDialog}>
+        <DialogContent className="max-w-sm max-h-[70vh] overflow-hidden flex flex-col">
+          <div className="flex flex-col gap-3 pt-2 flex-1 overflow-hidden">
+            <p className="font-medium text-sm">병합할 순간을 선택하세요</p>
+            <p className="text-xs text-muted-foreground">선택한 순간의 사진이 현재 순간으로 합쳐집니다.</p>
+            <div className="flex-1 overflow-y-auto flex flex-col gap-1">
+              {mergeMoments.map((m) => (
+                <button
+                  key={m.id}
+                  disabled={isMerging}
+                  onClick={() => handleMerge(m.id)}
+                  className="text-left px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm flex items-center gap-2 disabled:opacity-50"
+                >
+                  <span className="text-muted-foreground text-xs w-20 shrink-0">{m.date}</span>
+                  <span className="truncate">{m.title ?? "제목 없음"}</span>
+                </button>
+              ))}
+              {mergeMoments.length === 0 && (
+                <p className="text-sm text-muted-foreground py-4 text-center">병합할 수 있는 다른 순간이 없습니다</p>
+              )}
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setShowMergeDialog(false)}>취소</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -700,7 +905,7 @@ function SwipeableContent({ onClose, children }: { onClose: () => void; children
 
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────────────────
 
-export default function MomentDetailSheet({ momentId, onClose, onDeleted, onUpdated }: Props) {
+export default function MomentDetailSheet({ momentId, onClose, onDeleted, onUpdated, onSplit, onMerged }: Props) {
   const [moment, setMoment] = useState<MomentDetail | null>(null);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(false);
@@ -746,6 +951,8 @@ export default function MomentDetailSheet({ momentId, onClose, onDeleted, onUpda
       onMomentChange={handleMomentChange}
       onClose={onClose}
       onDeleted={onDeleted}
+      onSplit={onSplit}
+      onMerged={onMerged}
     />
   ) : null;
 

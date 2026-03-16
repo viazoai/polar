@@ -49,6 +49,31 @@ function PhotoPlaceholder() {
   );
 }
 
+async function downloadPolaroid(photoId: number, title: string | null) {
+  const url = `/api/photos/${photoId}/polaroid`;
+  try {
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const filename = `${title ?? "polar"}_polaroid.jpg`;
+    if (typeof navigator !== "undefined" && "share" in navigator && /mobile|android|iphone|ipad/i.test(navigator.userAgent)) {
+      const file = new File([blob], filename, { type: "image/jpeg" });
+      await navigator.share({ files: [file], title: title ?? "Polar" });
+    } else {
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objUrl);
+    }
+  } catch {
+    // silent
+  }
+}
+
 interface Props {
   moment: MomentSummary;
   index: number;
@@ -117,13 +142,29 @@ export default function PolaroidCard({ moment, index, onClick }: Props) {
         </div>
 
         {/* 캡션 영역 */}
-        <div className="px-[10px] pt-3 pb-7 text-center">
+        <div className="relative px-[10px] pt-3 pb-7 text-center">
           <p className="text-sm font-medium leading-snug text-zinc-700 line-clamp-2">
             {moment.title || "새로운 순간"}
           </p>
           <p className="text-xs text-zinc-400 mt-1">
             {formatCardDate(moment.date)}
           </p>
+          {moment.representative_photo_id && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                downloadPolaroid(moment.representative_photo_id!, moment.title);
+              }}
+              className="absolute bottom-2 right-2 w-6 h-6 flex items-center justify-center text-zinc-400 hover:text-zinc-600 transition-colors"
+              title="폴라로이드 다운로드"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            </button>
+          )}
         </div>
       </motion.div>
     </div>

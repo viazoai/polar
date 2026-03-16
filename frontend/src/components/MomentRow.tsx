@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatTimelineDate } from "@/lib/dateUtils";
 import { type MomentSummary } from "@/components/PolaroidCard";
 
+
 function PhotoIcon() {
   return (
     <svg
@@ -88,6 +89,7 @@ function MomentRow({ moment, onSelect }: Props) {
         <Badge variant="secondary" className="flex-shrink-0 text-xs">
           {moment.photo_count}장
         </Badge>
+
       </button>
     </div>
   );

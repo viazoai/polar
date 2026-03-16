@@ -4,6 +4,11 @@ from pathlib import Path
 DATA_DIR = Path("/app/data")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
+SECRET_KEY = os.getenv("SECRET_KEY", "polar-dev-secret-key-change-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_HOURS = 720  # 30일
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
 
 THUMBNAIL_GALLERY_SIZE = 800   # px

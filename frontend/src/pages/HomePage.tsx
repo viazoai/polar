@@ -9,6 +9,7 @@ import GalleryView from "@/components/GalleryView";
 import ListView from "@/components/ListView";
 import { type MomentSummary } from "@/components/PolaroidCard";
 import { apiGet } from "@/api/client";
+import { useFilterParams } from "@/hooks/useFilterParams";
 
 function PhotoIcon() {
   return (
@@ -37,13 +38,30 @@ export default function HomePage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [searchParams] = useSearchParams();
   const view = (searchParams.get("view") as "list" | "gallery") ?? "gallery";
+  const { people, year, month, q } = useFilterParams();
+
+  const buildQuery = () => {
+    const params = new URLSearchParams();
+    if (people.length > 0) params.set("people", people.join(","));
+    if (year) params.set("year", String(year));
+    if (month) params.set("month", String(month));
+    if (q) params.set("q", q);
+    return params.toString() ? `?${params}` : "";
+  };
 
   useEffect(() => {
-    apiGet<MomentSummary[]>("/moments")
+    setLoading(true);
+    apiGet<MomentSummary[]>(`/moments${buildQuery()}`)
       .then(setMoments)
       .catch(() => toast.error("데이터를 불러오지 못했습니다"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [people.join(","), year, month, q]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRefresh = async () => {
+    await apiGet<MomentSummary[]>(`/moments${buildQuery()}`)
+      .then(setMoments)
+      .catch(() => {});
+  };
 
   if (loading) {
     return (
@@ -84,14 +102,14 @@ export default function HomePage() {
               <div className="absolute top-0 left-0 right-0 z-10 pointer-events-none max-w-lg mx-auto px-4 pt-4">
                 <h1 className="text-2xl font-semibold">Moments</h1>
               </div>
-              <GalleryView moments={moments} onSelect={setSelectedId} />
+              <GalleryView moments={moments} onSelect={setSelectedId} onRefresh={handleRefresh} />
             </div>
           ) : (
             <>
               <div className="max-w-lg mx-auto px-4 pt-4 pb-3">
                 <h1 className="text-2xl font-semibold">Timeline</h1>
               </div>
-              <ListView moments={moments} onSelect={setSelectedId} />
+              <ListView moments={moments} onSelect={setSelectedId} onRefresh={handleRefresh} />
             </>
           )}
         </motion.div>
@@ -118,6 +136,21 @@ export default function HomePage() {
                 : m
             )
           );
+        }}
+        onSplit={() => {
+          // 순간 분리 시 목록 새로고침
+          const params = new URLSearchParams();
+          if (people.length > 0) params.set("people", people.join(","));
+          if (year) params.set("year", String(year));
+          if (month) params.set("month", String(month));
+          const query = params.toString() ? `?${params}` : "";
+          apiGet<MomentSummary[]>(`/moments${query}`)
+            .then(setMoments)
+            .catch(() => {});
+        }}
+        onMerged={(sourceId) => {
+          setMoments((prev) => prev.filter((m) => m.id !== sourceId));
+          setSelectedId(null);
         }}
       />
     </>

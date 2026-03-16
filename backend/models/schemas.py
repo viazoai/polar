@@ -65,6 +65,15 @@ class FamilyMemberUpdate(BaseModel):
 class MomentUpdate(BaseModel):
     title: str | None = None
     diary: str | None = None
+    date: str | None = None  # YYYY-MM-DD
+
+
+class MomentSplitRequest(BaseModel):
+    photo_ids: list[int]  # 새 순간으로 분리할 사진 ID 목록
+
+
+class MomentMergeRequest(BaseModel):
+    source_moment_id: int  # 이 순간으로 합쳐질 순간 ID
 
 
 class PersonTagUpdate(BaseModel):

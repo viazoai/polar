@@ -235,56 +235,63 @@ frontend/
 
 ### 검증
 
-- [ ] 사진 업로드 → AI 제목/일기 자동 생성 확인 (`.env`에 OPENAI_API_KEY 입력 완료)
+- [x] 사진 업로드 → AI 제목/일기 자동 생성 확인 (`.env`에 OPENAI_API_KEY 입력 완료)
 - [ ] 인물 참조 사진 등록 → 인물 식별 정확도 확인
 - [x] AI 실패 시 fallback (`ai_status = 'failed'`, "새로운 순간" 플레이스홀더 유지) 확인
 - [x] 수동 편집 후 저장/반영 확인
 
 ---
 
-## 5단계: 완성도 및 부가 기능 ⏳ 예정
+## 5단계: 완성도 및 부가 기능 ⏳ 진행중
 
 > 목표: 프로덕션 수준의 완성도 + 배포
 
-### 5-1. 필터링
+### 5-1. 필터링 ✅ 완료
 
-- [ ] 인물별 필터: 특정 가족 구성원이 태그된 순간만 표시
-  - 모바일: 하단 시트(Sheet)에서 필터 선택
-  - 데스크톱: Popover 또는 사이드 패널
-- [ ] 날짜별 필터: 연/월 단위
-  - 모바일: 하단 시트에서 연/월 선택기
-  - 데스크톱: Calendar Popover
-- [ ] 갤러리 뷰 + 리스트 뷰 모두에서 동작 (우측하단에 검색 돋보기 동그라미 아이콘 추가)
-- [ ] 필터 상태 URL 파라미터에 반영 (공유 가능)
+- [x] 인물별 필터: 특정 가족 구성원이 태그된 순간만 표시
+  - 모바일: 하단 Sheet, 데스크톱: Dropdown 패널
+- [x] 날짜별 필터: 연/월 단위
+- [x] 갤러리 뷰 + 리스트 뷰 모두에서 동작 (헤더 우측 필터 아이콘)
+- [x] 필터 상태 URL 파라미터에 반영 (`?people=1,2&year=2026&month=3`)
+- [x] 활성 필터 수 Badge로 표시
 
-### 5-2. 순간 수동 편집
+### 5-2. 순간 수동 편집 ✅ 완료
 
-- [ ] 대표 사진 변경 (사진 목록에서 선택)
-- [ ] 날짜 수정
-- [ ] 제목/일기 수동 편집
-- [ ] API: PATCH /api/moments/{id}, POST /merge, POST /split
+- [x] 대표 사진 변경 (사진 목록에서 선택)
+- [x] 날짜 수정 — 편집 모드에서 date input 인라인 편집
+- [x] 제목/일기 수동 편집
+- [x] API: PATCH /api/moments/{id} (title, diary, date)
+- [x] API: POST /api/moments/{id}/split — 선택 사진 분리
+- [x] API: POST /api/moments/{id}/merge — 다른 순간 병합
+- [x] 프론트엔드: 편집 모드에서 "사진 분리" / "순간 병합" 버튼
 
-### 5-3. 폴라로이드 다운로드
+### 5-3. 폴라로이드 다운로드 ✅ 완료
 
-- [ ] 서버 사이드 이미지 합성 (Pillow)
-  - 사진 + 하얀 테두리 + 하단 텍스트(제목/날짜)
-  - 필기체 한국어 폰트 (나눔손글씨 등)
-  - 출력: 1080px 너비 PNG
-- [ ] API: GET /api/photos/{id}/polaroid
-- [ ] 프론트엔드: 다운로드 버튼 (상세 보기에서)
-- [ ] 모바일: Web Share API로 바로 공유 옵션
+- [x] 서버 사이드 이미지 합성 (Pillow) — `backend/services/polaroid_service.py`
+  - 정방형 크롭 + 흰 테두리(20px) + 하단 텍스트 영역(80px)
+  - 나눔 폰트 (Dockerfile에 `fonts-nanum` 추가, 없으면 기본 폰트 폴백)
+  - 출력: 1080px 너비 JPEG
+- [x] API: GET /api/photos/{id}/polaroid
+- [x] 프론트엔드: 상세 보기 사진 하단 "다운로드" 버튼 (보기 모드)
+- [x] 모바일: Web Share API, 데스크톱: `<a download>` 자동 클릭
 
-### 5-4. 사용자 인증
+### 5-4. 사용자 인증 ✅ 완료
 
-- [ ] 간단한 로그인 시스템 (ID/비밀번호)
-- [ ] JWT 토큰 기반 인증 (httpOnly 쿠키 또는 localStorage)
-- [ ] API: POST /api/auth/login, /logout, GET /api/auth/me
-- [ ] 로그인 페이지 (shadcn Card + Form), 계정 생성 및 요청
-- [ ] 관리자: 사용자 계정 승인
-- [ ] 미인증 상태에서 모든 페이지 접근 차단 → 로그인 리다이렉트
+- [x] JWT httpOnly 쿠키 기반 인증 (`python-jose` + `passlib[bcrypt]`)
+- [x] API: POST /api/auth/login, /logout, GET /api/auth/me
+- [x] 모든 라우터에 `Depends(get_current_user)` 보호
+- [x] 로그인 페이지 (`frontend/src/pages/LoginPage.tsx`)
+- [x] `useAuth()` 훅 — `/api/auth/me` 호출로 인증 상태 확인
+- [x] `ProtectedLayout` — 미인증 시 `/login` 리다이렉트
+- [x] API 클라이언트 전체에 `credentials: "include"` + 401 리다이렉트 추가
+- [x] `ADMIN_PASSWORD` 환경변수로 초기 admin 계정 자동 생성 (seed_admin)
+- [ ] 관리자: 사용자 계정 추가/승인 UI (추후 필요 시)
 
 ### 5-5. 배포
 
+- [x] 개발용 Docker Compose 구성 — `docker-compose.yml` (dev server 기반)
+- [x] CORS 미들웨어 — `localhost:3200`, `polar.zoai.uk` 허용
+- [x] `.env.example` 환경변수 템플릿 준비
 - [ ] 프로덕션 Docker Compose 구성
   - 프론트엔드: Vite build → nginx로 정적 파일 서빙
   - nginx에서 /api → FastAPI 프록시

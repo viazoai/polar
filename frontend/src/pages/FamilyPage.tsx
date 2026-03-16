@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { apiGet, apiPost, apiPatch, apiDelete, apiPostFormData } from "@/api/client";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 
 interface FamilyMember {
   id: number;
@@ -220,6 +221,15 @@ export default function FamilyPage() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const fetchMembers = async () => {
+    await apiGet<FamilyMember[]>("/family")
+      .then(setMembers)
+      .catch(() => {});
+  };
+
+  const { pullY, refreshing } = usePullToRefresh(scrollRef, fetchMembers);
 
   useEffect(() => {
     apiGet<FamilyMember[]>("/family")
@@ -246,6 +256,24 @@ export default function FamilyPage() {
   };
 
   return (
+    <div
+      ref={scrollRef}
+      style={{ height: "calc(100dvh - var(--header-height))", overflowY: "auto", overscrollBehaviorY: "contain" }}
+    >
+      {(pullY > 0 || refreshing) && (
+        <div
+          className="fixed left-1/2 -translate-x-1/2 z-50 flex items-center justify-center"
+          style={{ top: `calc(var(--header-height) + ${refreshing ? 16 : pullY * 0.18}px)` }}
+        >
+          <div className={`w-8 h-8 rounded-full bg-background border shadow-md flex items-center justify-center ${refreshing ? "animate-spin" : ""}`}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ transform: `rotate(${pullY * 3.5}deg)` }}>
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+              <path d="M21 3v5h-5" />
+            </svg>
+          </div>
+        </div>
+      )}
     <div className="max-w-lg mx-auto px-4 pt-4 pb-tab flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Family</h1>
@@ -296,6 +324,7 @@ export default function FamilyPage() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
     </div>
   );
 }

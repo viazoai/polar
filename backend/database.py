@@ -85,11 +85,15 @@ def init_db():
     for sql in [
         "ALTER TABLE moments ADD COLUMN ai_status TEXT NOT NULL DEFAULT 'pending'",
         "ALTER TABLE moments ADD COLUMN content_source TEXT",  # NULL | 'ai' | 'manual'
+        "ALTER TABLE users ADD COLUMN is_approved BOOLEAN NOT NULL DEFAULT 0",
     ]:
         try:
             conn.execute(sql)
         except sqlite3.OperationalError:
             pass  # 이미 존재하면 무시
+
+    # 기존 admin 계정 is_approved 보정 (마이그레이션 이전에 생성된 계정)
+    conn.execute("UPDATE users SET is_approved = 1 WHERE is_admin = 1 AND is_approved = 0")
 
     # 일회성 데이터 픽스: AI 분석 큐에 올라간 적 없는 기존 순간들을 'failed'로 교정
     conn.execute("""
